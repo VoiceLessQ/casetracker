@@ -27,6 +27,19 @@ python manage.py runserver
 
 Open http://127.0.0.1:8000/admin/ and log in.
 
+### Demo it
+
+```bash
+python manage.py seed_demo     # synthetic departments, workers, people, cases
+```
+
+Then open **http://127.0.0.1:8000/dashboard/** — a worker's worklist (my cases,
+my tasks, needs-attention, department queue). Log in as a seeded worker
+(`anna`, `bo`, `david`, `clara`; password `demo12345`) or impersonate them from
+the admin. The point of the demo: the same dashboard shows *different* things
+per worker, and a shielded person disappears entirely from search for a worker
+without a grant — the access model made visible, not just described.
+
 Optional environment:
 - `MUNICIPAL_DRIVE_ROOT` — where document links point (defaults to `backend/drive`).
 - `SECRET_KEY`, `DEBUG=0`, `ALLOWED_HOSTS` — set before exposing anywhere.
