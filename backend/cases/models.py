@@ -467,3 +467,27 @@ class Circumstance(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ExportEvent(models.Model):
+    """Append-only record of a document export — the deliberate, controlled
+    leak. Exporting documents out of the system is high-sensitivity, so every
+    export is logged: who did it, when, why, how many documents, what was in
+    it (manifest snapshot), and the SHA-256 of the encrypted zip so a leaked
+    archive can be traced back here. The zip password is NEVER stored — it is
+    shown once to the exporter and not kept anywhere."""
+
+    exported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="exports",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    document_count = models.PositiveIntegerField()
+    reason = models.CharField(max_length=255)   # why / for whom (accountability)
+    manifest = models.TextField()                # immutable snapshot of contents
+    sha256 = models.CharField(max_length=64)     # of the encrypted zip
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.created_at:%Y-%m-%d %H:%M} {self.exported_by} ({self.document_count} docs)"

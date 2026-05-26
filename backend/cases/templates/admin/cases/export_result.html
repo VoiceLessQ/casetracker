@@ -1,0 +1,21 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><strong>{{ count }}</strong> document(s) packed into an encrypted zip.
+This export has been logged.</p>
+
+<div style="padding:1em;margin:1em 0;border:2px solid #ba2121;background:#fff4f4;">
+  <p style="margin:0 0 .5em;"><strong>One-time password</strong> &mdash; copy it now.
+  It is <strong>not stored</strong> and will not be shown again. If you lose it,
+  re-export.</p>
+  <p style="font-size:1.5em;font-family:monospace;user-select:all;margin:0;">{{ password }}</p>
+</div>
+
+<p><a class="button default" download="{{ filename }}"
+      href="data:application/zip;base64,{{ zip_b64 }}">Download encrypted zip</a></p>
+
+<p>Open it with 7-Zip, WinRAR, or any AES-zip-capable tool, using the password above.
+The archive also contains a <code>MANIFEST.txt</code> listing everything in it.</p>
+
+<p style="color:#555;">Archive SHA-256 (recorded in the audit log for traceability):
+<br><code>{{ sha256 }}</code></p>
+{% endblock %}

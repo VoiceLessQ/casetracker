@@ -1,13 +1,18 @@
-from django.contrib import admin
+import base64
+
+from django.contrib import admin, messages
 from django.db.models import Q
+from django.template.response import TemplateResponse
+from django.utils import timezone
 
 from org.models import Department, Membership
 
+from .exports import build_encrypted_zip, generate_password
 from .models import (
     Case, StatusEvent, Document, FollowUp,
     CaseLog, CaseAssignment, CalendarEvent,
     LegalReference, CaseLegalRef,
-    CaseCategory, RegulationRule, Circumstance,
+    CaseCategory, RegulationRule, Circumstance, ExportEvent,
 )
 
 
@@ -94,6 +99,63 @@ class ScopedAdmin(admin.ModelAdmin):
         return request.user.is_superuser
 
 
+@admin.action(description="Export selected as encrypted zip")
+def export_encrypted_zip(modeladmin, request, queryset):
+    """High-sensitivity, deliberate leak: pack the selected documents into one
+    AES-256 encrypted zip with a one-time auto-generated password (shown once,
+    never stored), and log the export. Only leads/superusers may export, and
+    only documents already within their scope (the queryset is dept-scoped)."""
+    if not (request.user.is_superuser or max_role_rank(request.user) >= LEAD):
+        modeladmin.message_user(
+            request, "Only leads or superusers can export documents.", messages.ERROR
+        )
+        return
+    docs = list(queryset)
+    if not docs:
+        modeladmin.message_user(request, "No documents selected.", messages.WARNING)
+        return
+
+    common = {
+        **modeladmin.admin_site.each_context(request),
+        "opts": modeladmin.model._meta,
+        "media": modeladmin.media,
+    }
+
+    if request.POST.get("confirm"):
+        reason = (request.POST.get("reason") or "").strip()
+        if not reason:
+            modeladmin.message_user(
+                request, "A reason is required to export.", messages.ERROR
+            )
+        else:
+            password = generate_password()
+            zip_bytes, manifest, sha256 = build_encrypted_zip(docs, password)
+            ExportEvent.objects.create(
+                exported_by=request.user,
+                document_count=len(docs),
+                reason=reason,
+                manifest=manifest,
+                sha256=sha256,
+            )
+            return TemplateResponse(request, "admin/cases/export_result.html", {
+                **common,
+                "title": "Encrypted export ready",
+                "password": password,
+                "sha256": sha256,
+                "count": len(docs),
+                "zip_b64": base64.b64encode(zip_bytes).decode("ascii"),
+                "filename": f"casetracker-export-{timezone.now():%Y%m%d-%H%M%S}.zip",
+            })
+
+    return TemplateResponse(request, "admin/cases/export_confirm.html", {
+        **common,
+        "title": "Confirm encrypted export",
+        "documents": docs,
+        "selected": [str(d.pk) for d in docs],
+        "action_checkbox_name": admin.helpers.ACTION_CHECKBOX_NAME,
+    })
+
+
 class CaseAssignmentInline(admin.TabularInline):
     """Who is working this case — shown on the case page. Reassigning/handing
     off is a LEAD action: members see assignments but can't change them."""
@@ -169,6 +231,14 @@ class DocumentAdmin(ScopedAdmin):
     list_display = ("label", "kind", "case", "person", "email_from", "source", "added_by", "added_at")
     list_filter = ("kind", "source")
     search_fields = ("label", "case__ref", "person__cpr", "location", "email_from", "email_subject")
+    actions = [export_encrypted_zip]
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # Only leads/superusers see the export action at all.
+        if not (request.user.is_superuser or max_role_rank(request.user) >= LEAD):
+            actions.pop("export_encrypted_zip", None)
+        return actions
 
     def get_queryset(self, request):
         # Department-scope case-linked docs, but also include person-level docs
@@ -211,6 +281,32 @@ class CaseAssignmentAdmin(ScopedAdmin):
     list_display = ("case", "worker", "role", "active", "assigned_at")
     list_filter = ("role", "active")
     autocomplete_fields = ("worker",)
+
+
+@admin.register(ExportEvent)
+class ExportEventAdmin(admin.ModelAdmin):
+    """Append-only audit trail of document exports. Created only by the export
+    flow; never editable or deletable. Superusers see every export; others see
+    only their own."""
+    list_display = ("created_at", "exported_by", "document_count", "reason", "sha256")
+    list_filter = ("created_at", "exported_by")
+    search_fields = ("reason", "sha256", "exported_by__username")
+    readonly_fields = ("exported_by", "created_at", "document_count", "reason", "manifest", "sha256")
+
+    def has_add_permission(self, request):
+        return False  # exports are recorded by the export flow, not added by hand
+
+    def has_change_permission(self, request, obj=None):
+        return obj is None
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(exported_by=request.user)
 
 
 @admin.register(CalendarEvent)

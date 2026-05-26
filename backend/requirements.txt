@@ -1,1 +1,2 @@
 Django>=5.0,<5.2
+pyzipper>=0.3,<0.4   # AES-256 encrypted zip export
