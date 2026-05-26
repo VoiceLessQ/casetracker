@@ -122,6 +122,31 @@ enforced by the platform that owns the file, and every open is logged here.
   exception, not routine IT setup. That is the owned 10% where mistakes are
   worst.
 
+## Heterogeneous backends: view vs. record
+
+ESDH adoption is uneven — some departments use **GetOrganized** (the
+SharePoint-based Danish public-sector ESDH: cases, documents, journaling,
+Outlook integration, AD access), others use shared drives or nothing structured.
+This is the common real-world picture, and it shapes what the overlay is allowed
+to do **per department**:
+
+- **Where a real ESDH (GetOrganized) exists**, it is the system of record. The
+  overlay **surfaces and links** its cases and defers to its journaling and
+  access model — it must NOT re-journal or duplicate. Duplicating competes with
+  an audited product and re-imports the records-compliance burden.
+- **Where there's only a drive or nothing**, the overlay gets *pulled* into
+  being the record. Hold that line consciously: decide, per department, whether
+  the overlay is a **view over** an existing record system or is being asked to
+  **be** the record. The moment it is the authoritative record it inherits
+  journalpligt, retention, audit, and the governance gate — heaviest exactly
+  where a department has nothing today.
+
+The overlay's genuine value is the **cross-department unifying view** (person as
+shared spine across whatever each department runs underneath) — GetOrganized
+does not unify what it does not own. Mixing the two modes silently — a dashboard
+in one department, an unaudited system of record in another — is the risk to
+avoid.
+
 ## What exists today vs. the target build
 
 **Built (on `main`, prototype):** department scoping, viewer/member/lead roles,
