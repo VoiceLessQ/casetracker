@@ -124,6 +124,12 @@ Opening a document is a checkpoint **separate from navigation**:
 For non-shielded persons, department scope remains the access boundary; opens
 are still logged.
 
+**Scope of shielding (don't over-read it).** Shielding gates *opening documents*
+and *search/browse visibility*. It does **not** hide a shielded person's own
+(decrypted) record fields from a worker who legitimately reaches them in scope —
+e.g. via a shared case. That's a deliberate, documented threat-model call
+(in-scope means a case-based reason to reach the person), not total invisibility.
+
 ### Search (snooping is the dominant risk)
 The recurring breach in systems like this is an authorised worker looking up
 someone they have no business looking at. Search is access, so it is **scoped
