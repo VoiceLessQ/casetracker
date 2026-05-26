@@ -92,6 +92,36 @@ enforced by the platform that owns the file, and every open is logged here.
 - **Calendars:** integrate with Outlook via Graph rather than storing events
   here (the current `CalendarEvent` model becomes a reference/sync target).
 
+## Drive isolation & who owns permissions
+
+- **Dedicated casework drive.** Content lives in its own SharePoint site /
+  library, permissioned by Entra groups per department — not scattered across
+  workers' personal OneDrives. Department scope is then inherited from the
+  routine site/group permissions IT already operates; the blast radius is
+  contained to that site.
+- **The overlay uses delegated Graph permissions, never application
+  permissions.** The app acts *as the signed-in worker* (their SSO session), so
+  it is structurally incapable of seeing more than that worker already can, and
+  there is no standing, app-owned, tenant-wide access key to steal. A compromise
+  of the overlay yields nothing beyond the current user's own access. Trade-off:
+  no broad background jobs; anything needing elevation (creating folders,
+  setting ACLs) is done by IT or a separate narrow, audited path — not baked
+  into the app.
+- **Storage follows IT's structure; the shared spine is logical.** Physical
+  documents sit department-organized inside the governed drive. "Person as
+  shared spine" is a *logical* construct in the index (uid-keyed) — the overlay
+  draws the thread across a person's cases. Do NOT create uid-keyed flat folders
+  outside IT's site/permission structure; that builds a parallel permissioning
+  surface IT must manage separately and undercuts the "we just use the drive"
+  win.
+- **IT owns the ACLs; M365 is the source of truth.** Per-person folders and
+  shielding exceptions are a deliberate, owned process living in M365, with the
+  overlay only reflecting them. Department access is additive (group-based,
+  routine); **shielding is subtractive** (in the group, but blocked from this
+  one person) — per-item unique permissions / broken inheritance, the messy
+  exception, not routine IT setup. That is the owned 10% where mistakes are
+  worst.
+
 ## What exists today vs. the target build
 
 **Built (on `main`, prototype):** department scoping, viewer/member/lead roles,
@@ -120,13 +150,44 @@ data into M365 shrinks this system's surface (a real benefit), but it does not
 remove the institutional requirement. **Do not run this on real data on the
 strength of this design alone.**
 
-## Open decisions
+## Security is shared with the operators
 
-- Does narrative text (notes, logs, journaling notes) stay in the index or move
-  to the drive? (Determines remaining PII footprint.)
-- Can the citizen be referenced by their permanent `uid` + drive folder so the
-  CPR need not be stored here at all? (The folder is already `uid`-keyed.)
-- Where is the slimmed-down index database hosted (their Azure tenant)?
-- "Not see" model per data type: fully filtered (existence hidden) vs.
-  visible-but-locked (cross-department coordination). Default: department scope
-  hides other departments' case material; shielding hides shielded documents.
+The technical controls in this system are necessary but they are not where most
+of the real-world risk lives. The majority of it lives with the people operating
+it: IT maintaining the drive permissions and the shielding exceptions, the named
+data controller's accountability, and workers handling exports, links, and what
+they enter responsibly. No amount of code substitutes for that operational
+discipline.
+
+So the system's job is bounded and honest: make the right thing easy and the
+wrong thing hard-and-logged. Concretely that is what the gated/logged export,
+the append-only access log, the immutable journal, department scoping, and the
+shielding gate are for — they shape and record behaviour, they do not replace
+the humans and the institutional ownership around them. Design every new feature
+to keep that split clear: the system enforces and records; the operators and IT
+remain responsible for the access decisions and the data itself.
+
+## Decisions leaning in, and still open
+
+Settled (see sections above): overlay-not-store; identity + roles from Entra;
+dedicated casework drive with delegated (not application) Graph permissions;
+shared spine is logical while storage follows IT's structure; IT owns the ACLs.
+
+Leaning / still to confirm:
+- **Narrative text (notes, logs, journaling notes):** lean toward keeping it OUT
+  of the index where practical — case notes are usually the most sensitive free
+  text in the building, not a small surface. Tension: notes on the drive are
+  clunky to search/render in a one-pane dashboard. This is the real trade.
+- **CPR:** lean toward NOT storing it at all — reference the citizen by `uid`
+  (folder is already uid-keyed). That removes the blind-index brute-force risk
+  and most of the field-encryption surface. Cost: "find by CPR" becomes a
+  Graph/source lookup mapping to uid, not a local query.
+- **Index hosting:** the municipality's Azure tenant, not the developer's infra
+  — inseparable from "the municipality is the data controller."
+- **"Not see" model:** existence-hidden by default for shielding (knowing a
+  person *has* a shielded case is itself the leak); visible-but-locked only as
+  an explicit, logged exception for genuine cross-department coordination.
+- **Metadata is not the safe part.** A mail trail's from/subject/date (and a
+  journal registration's subject/direction) can be as revealing as a body —
+  "from: psykiatrisk klinik". Scope and shield the metadata exactly like
+  content; "we only kept metadata" is not a safety argument.
