@@ -60,9 +60,9 @@ class PersonDocumentInline(admin.TabularInline):
 @admin.register(Person)
 class PersonAdmin(admin.ModelAdmin):
     list_display = ("name", "cpr", "address", "birth_date")
-    # CPR is encrypted, so it isn't an icontains field; lookup() matches it via
-    # the blind index. Keep name/address here for the search box and autocomplete.
-    search_fields = ("name", "address")
+    # CPR/address are encrypted, so they aren't icontains fields. lookup()
+    # matches name (partial) and CPR (exact, via blind index).
+    search_fields = ("name",)
     inlines = [RelationshipInline, PersonNoteInline, PersonDocumentInline]
 
     def get_search_results(self, request, queryset, search_term):
@@ -78,7 +78,7 @@ class PersonNoteAdmin(CprSearchMixin, admin.ModelAdmin):
     cpr_bidx_paths = ("person__cpr_bidx",)
     list_display = ("person", "created_at", "visibility", "author")
     list_filter = ("visibility",)
-    search_fields = ("person__name", "text")   # CPR handled via blind index
+    search_fields = ("person__name",)   # text is encrypted; CPR via blind index
 
     # Append-only: notes can be added, never edited or deleted.
     def has_change_permission(self, request, obj=None):

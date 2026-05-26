@@ -4,7 +4,7 @@ from django.conf import settings
 from django.db import models
 
 from . import crypto
-from .fields import EncryptedCharField
+from .fields import EncryptedCharField, EncryptedTextField
 
 
 class PersonQuerySet(models.QuerySet):
@@ -46,9 +46,9 @@ class Person(models.Model):
     #   the CPR — so the folder never moves when a CPR is assigned/corrected or a
     #   parent changes. Parent/guardian links live in the family tree, not here.
     name = models.CharField(max_length=160)                            # placeholder
-    address = models.CharField(max_length=255, blank=True)             # current address (placeholder)
+    address = EncryptedCharField(max_length=600, blank=True)           # ENCRYPTED (shielding case)
     birth_date = models.DateField(null=True, blank=True)
-    note = models.TextField(blank=True)                                # free personal-info text (placeholder)
+    note = EncryptedTextField(blank=True)                              # ENCRYPTED free personal-info text
 
     objects = PersonQuerySet.as_manager()
 
@@ -182,7 +182,7 @@ class PersonNote(models.Model):
 
     person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="notes")
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-    text = models.TextField()
+    text = EncryptedTextField()                                        # ENCRYPTED at rest
     visibility = models.CharField(
         max_length=8, choices=Visibility.choices, default=Visibility.ALL_STAFF,
     )
