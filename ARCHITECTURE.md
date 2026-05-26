@@ -147,6 +147,42 @@ does not unify what it does not own. Mixing the two modes silently — a dashboa
 in one department, an unaudited system of record in another — is the risk to
 avoid.
 
+## Case lifecycle, handoff, and continuity
+
+A case is **open** (new / in_progress / waiting / blocked) until **closed**
+(`status=done`), at which point it leaves the active worklist but stays readable
+for audit/journaling/reopening. While open it has an owning department
+(`Case.owner_department`), may be **accepted** by a worker (`CaseAssignment`,
+active), and carries tasks (`FollowUp`) and a cold-watch (`Case.objects.stale()`).
+
+**Moving a case between departments is gated, not free.** Because the receiving
+department must not inherit an incomplete case (missing required legal basis,
+etc.), a department move goes through an approved **handoff**:
+- A worker **requests** a handoff (`CaseHandoff`) to another department.
+- It can only be **approved by a department head (Lead) of the holding
+  department**, and approval is **blocked until the case is complete** —
+  `handoff_blockers(case)` checks the required items (category set, person
+  linked, every `level=required` regulation rule's reference actually linked).
+- On approval the case's `owner_department` moves and a `StatusEvent` records the
+  handoff (from/to department, actor). Rejection is recorded with a reason.
+- Direct department changes are otherwise locked for non-superusers, so the
+  approval path is the way a case moves on.
+
+**Handoff/status changes are auto-recorded.** Any change to a case's owning
+department or status writes a `StatusEvent` (with the acting user), so "where is
+it now / where has it been" is a trustworthy trail — this powers both the ping
+routing and the takeover record. (Previously manual; now wired.)
+
+**Takeover for continuity is the payoff.** A case must not die because its worker
+is overloaded or leaves. A Lead reassigns (or a worker picks up from the
+department queue), and the next worker inherits the **complete index/context
+instantly** — journal, document links, history, notes. Caveat that ties back to
+the access model: the *context* transfers immediately, but *opening the actual
+files* still follows the drive's permissions — on a cross-department takeover the
+drive ACLs must be updated (IT-owned), and a shielded case needs a fresh grant.
+"Just like that" means context now, content as the permission change follows —
+never a bypass of the access gate.
+
 ## What exists today vs. the target build
 
 **Built (on `main`, prototype):** department scoping, viewer/member/lead roles,

@@ -12,12 +12,14 @@ from people.access import can_open_person_documents
 from people.admin import CprSearchMixin
 
 from .exports import build_encrypted_zip, generate_password, safe_drive_path
+from .handoff import HandoffError, approve_handoff, reject_handoff
 from .journal import JournalError, journalize
 from .models import (
     Case, StatusEvent, Document, FollowUp,
     CaseLog, CaseAssignment, CalendarEvent,
     LegalReference, CaseLegalRef,
     CaseCategory, RegulationRule, Circumstance, ExportEvent, DocumentAccessEvent,
+    CaseHandoff,
 )
 
 
@@ -346,6 +348,33 @@ class CaseAdmin(CprSearchMixin, ScopedAdmin):
             kwargs["queryset"] = Department.objects.filter(id__in=allowed)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(super().get_readonly_fields(request, obj))
+        # Once a case exists, non-superusers can't move it between departments by
+        # editing the field directly — that goes through an approved handoff.
+        if obj is not None and not request.user.is_superuser:
+            ro.append("owner_department")
+        return tuple(dict.fromkeys(ro))
+
+    def save_model(self, request, obj, form, change):
+        prev = None
+        if change and obj.pk:
+            prev = Case.objects.filter(pk=obj.pk).values("owner_department_id", "status").first()
+        super().save_model(request, obj, form, change)
+        if prev:
+            dept_changed = prev["owner_department_id"] != obj.owner_department_id
+            status_changed = prev["status"] != obj.status
+            if dept_changed or status_changed:
+                # Auto-record the handoff/transition so "where is it / where has
+                # it been" is a trustworthy trail.
+                StatusEvent.objects.create(
+                    case=obj, actor=request.user,
+                    from_status=prev["status"], to_status=obj.status,
+                    from_department_id=prev["owner_department_id"],
+                    to_department_id=obj.owner_department_id,
+                    note="Changed via case edit",
+                )
+
 
 @admin.register(StatusEvent)
 class StatusEventAdmin(ScopedAdmin):
@@ -433,6 +462,58 @@ class CaseAssignmentAdmin(ScopedAdmin):
     list_display = ("case", "worker", "role", "active", "assigned_at")
     list_filter = ("role", "active")
     autocomplete_fields = ("worker",)
+
+
+@admin.action(description="Approve selected handoffs (move the case)")
+def approve_handoffs(modeladmin, request, queryset):
+    for handoff in queryset:
+        try:
+            approve_handoff(handoff, request.user)
+        except HandoffError as exc:
+            modeladmin.message_user(request, f"{handoff.case.ref}: {exc}", messages.ERROR)
+        else:
+            modeladmin.message_user(
+                request, f"{handoff.case.ref}: moved to {handoff.to_department}.", messages.SUCCESS
+            )
+
+
+@admin.action(description="Reject selected handoffs")
+def reject_handoffs(modeladmin, request, queryset):
+    for handoff in queryset:
+        try:
+            reject_handoff(handoff, request.user)
+        except HandoffError as exc:
+            modeladmin.message_user(request, f"{handoff.case.ref}: {exc}", messages.ERROR)
+        else:
+            modeladmin.message_user(request, f"{handoff.case.ref}: handoff rejected.", messages.WARNING)
+
+
+@admin.register(CaseHandoff)
+class CaseHandoffAdmin(ScopedAdmin):
+    department_path = "case__owner_department_id"
+    list_display = ("case", "from_department", "to_department", "status", "requested_by", "requested_at", "decided_by")
+    list_filter = ("status",)
+    search_fields = ("case__ref", "note")
+    autocomplete_fields = ("case", "to_department")
+    actions = [approve_handoffs, reject_handoffs]
+
+    _stamped = ("from_department", "requested_by", "requested_at", "status",
+                "decided_by", "decided_at", "decision_note")
+
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(super().get_readonly_fields(request, obj)) + list(self._stamped)
+        if obj is not None:
+            # A created handoff is a record decided via the approve/reject
+            # actions, not by editing it.
+            ro += ["case", "to_department", "note"]
+        return tuple(dict.fromkeys(ro))
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.requested_by = request.user
+            obj.from_department = obj.case.owner_department
+            obj.status = CaseHandoff.Status.PENDING
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(ExportEvent)

@@ -558,3 +558,43 @@ class DocumentAccessEvent(models.Model):
     def __str__(self):
         verb = "opened" if self.allowed else "DENIED"
         return f"{self.created_at:%Y-%m-%d %H:%M} {self.opened_by} {verb} {self.document_label}"
+
+
+class CaseHandoff(models.Model):
+    """A requested move of a case to another department. Moving a case is gated:
+    it must be approved by a department head (Lead) of the holding department,
+    and approval is blocked until the case is complete (see
+    cases.handoff.handoff_blockers) so the receiving department never inherits a
+    case missing its required basis. On approval the case's owner_department
+    moves and a StatusEvent records it."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending approval"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="handoffs")
+    from_department = models.ForeignKey(
+        Department, on_delete=models.PROTECT, related_name="+",
+    )  # snapshot of the holder at request time
+    to_department = models.ForeignKey(
+        Department, on_delete=models.PROTECT, related_name="+",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="handoffs_requested",
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    note = models.CharField(max_length=500, blank=True)        # why it's moving
+    status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        null=True, blank=True, related_name="handoffs_decided",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+
+    def __str__(self):
+        return f"{self.case.ref}: {self.from_department} → {self.to_department} ({self.status})"
