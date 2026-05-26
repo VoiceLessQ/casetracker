@@ -25,10 +25,9 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from django.conf import settings
 
 
-def _derive(info, length=32):
-    return HKDF(algorithm=hashes.SHA256(), length=length, salt=None, info=info).derive(
-        settings.FIELD_ENCRYPTION_KEY.encode()
-    )
+def _derive(info, length=32, master=None):
+    secret = (master or settings.FIELD_ENCRYPTION_KEY).encode()
+    return HKDF(algorithm=hashes.SHA256(), length=length, salt=None, info=info).derive(secret)
 
 
 @lru_cache(maxsize=1)
@@ -39,6 +38,23 @@ def _fernet():
 @lru_cache(maxsize=1)
 def _bidx_key():
     return _derive(b"casetracker-cpr-blind-index")
+
+
+@lru_cache(maxsize=1)
+def _backup_fernet():
+    # Backups need a STABLE key so any backup can be restored later. Derived from
+    # a dedicated BACKUP_ENCRYPTION_KEY if set, otherwise from the master field
+    # key, via a distinct HKDF context so it isn't the same key as the fields.
+    master = getattr(settings, "BACKUP_ENCRYPTION_KEY", "") or settings.FIELD_ENCRYPTION_KEY
+    return Fernet(base64.urlsafe_b64encode(_derive(b"casetracker-backup", master=master)))
+
+
+def backup_encrypt_bytes(data):
+    return _backup_fernet().encrypt(data)
+
+
+def backup_decrypt_bytes(token):
+    return _backup_fernet().decrypt(token)
 
 
 def encrypt(text):

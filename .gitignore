@@ -21,6 +21,10 @@ db.sqlite3
 db.sqlite3-journal
 local_settings.py
 
+# Encrypted DB backups (never commit, even though they're ciphertext)
+backups/
+*.sqlite3.enc
+
 # Environment / secrets
 .env
 .env.*

@@ -96,3 +96,8 @@ MUNICIPAL_DRIVE_ROOT = os.environ.get("MUNICIPAL_DRIVE_ROOT", str(BASE_DIR / "dr
 FIELD_ENCRYPTION_KEY = os.environ.get(
     "FIELD_ENCRYPTION_KEY", "dev-only-insecure-field-key-change-me"
 )
+
+# Optional dedicated key for encrypted database backups (manage.py backup_db).
+# If empty, the backup key is derived from FIELD_ENCRYPTION_KEY. Set it (from a
+# secret manager) to keep backup access separate from field-decryption access.
+BACKUP_ENCRYPTION_KEY = os.environ.get("BACKUP_ENCRYPTION_KEY", "")
