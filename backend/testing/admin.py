@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
 from django.shortcuts import redirect
 
+from org.admin import MembershipInline
+
 User = get_user_model()
 
 
@@ -38,3 +40,4 @@ admin.site.unregister(User)
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     actions = [impersonate]
+    inlines = [MembershipInline]
