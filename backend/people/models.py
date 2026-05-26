@@ -3,11 +3,16 @@ import uuid
 from django.conf import settings
 from django.db import models
 
+from . import crypto
+from .fields import EncryptedCharField
+
 
 class PersonQuerySet(models.QuerySet):
     def lookup(self, term):
-        """Find people by name or CPR. Name match is case-insensitive partial;
-        CPR match tolerates a missing dash (so '0101901234' finds '010190-1234').
+        """Find people by name or CPR. Name match is case-insensitive partial.
+        CPR is encrypted at rest, so it is matched EXACTLY via its blind index
+        (dash-tolerant: '0101901234' finds '010190-1234'). Partial-CPR substring
+        search is intentionally not possible — encryption is the trade.
 
         Name lookup is the sensitive path (enumeration/snooping) — log and
         access-limit it in a real deployment.
@@ -15,11 +20,10 @@ class PersonQuerySet(models.QuerySet):
         term = (term or "").strip()
         if not term:
             return self.none()
-        q = models.Q(name__icontains=term) | models.Q(cpr__icontains=term)
-        digits = term.replace("-", "").replace(" ", "")
-        if len(digits) >= 6 and digits.isdigit():
-            dashed = f"{digits[:6]}-{digits[6:]}" if len(digits) > 6 else digits
-            q |= models.Q(cpr__icontains=dashed)
+        q = models.Q(name__icontains=term)
+        bidx = crypto.blind_index_for_term(term)
+        if bidx:
+            q |= models.Q(cpr_bidx=bidx)
         return self.filter(q)
 
 
@@ -31,9 +35,12 @@ class Person(models.Model):
     real one can never slip in.
     """
 
-    cpr = models.CharField(
-        max_length=11, unique=True, null=True, blank=True, db_index=True,
-    )  # DDMMYY-XXXX (placeholder). NULL while pre-CPR (e.g. newborn).
+    cpr = EncryptedCharField(
+        max_length=255, null=True, blank=True,
+    )  # DDMMYY-XXXX (placeholder), ENCRYPTED AT REST. NULL while pre-CPR.
+    cpr_bidx = models.CharField(
+        max_length=64, null=True, blank=True, editable=False, db_index=True,
+    )  # keyed HMAC of the normalised CPR — enables exact lookup + uniqueness
     uid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     # ^ permanent internal id. The folder is keyed on THIS, for life — never on
     #   the CPR — so the folder never moves when a CPR is assigned/corrected or a
@@ -47,6 +54,26 @@ class Person(models.Model):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            # CPR uniqueness moved off the (now non-deterministic) ciphertext
+            # onto the blind index; only enforced for people who have a CPR.
+            models.UniqueConstraint(
+                fields=["cpr_bidx"],
+                condition=models.Q(cpr_bidx__isnull=False),
+                name="uniq_person_cpr_bidx",
+            ),
+        ]
+
+    def _sync_cpr_bidx(self):
+        self.cpr_bidx = crypto.cpr_blind_index(self.cpr) if self.cpr else None
+
+    def clean(self):
+        super().clean()
+        self._sync_cpr_bidx()   # so the uniqueness constraint validates on the new CPR
+
+    def save(self, *args, **kwargs):
+        self._sync_cpr_bidx()   # authoritative: keep the index in step with the CPR
+        super().save(*args, **kwargs)
 
     def __str__(self):
         label = self.cpr or f"no CPR · {self.uid.hex[:8]}"

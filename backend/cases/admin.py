@@ -6,6 +6,7 @@ from django.template.response import TemplateResponse
 from django.utils import timezone
 
 from org.models import Department, Membership
+from people.admin import CprSearchMixin
 
 from .exports import build_encrypted_zip, generate_password
 from .models import (
@@ -197,11 +198,12 @@ class CaseLegalRefInline(admin.TabularInline):
 
 
 @admin.register(Case)
-class CaseAdmin(ScopedAdmin):
+class CaseAdmin(CprSearchMixin, ScopedAdmin):
     department_path = "owner_department_id"
+    cpr_bidx_paths = ("person__cpr_bidx",)
     list_display = ("ref", "title", "person", "owner_department", "status", "waiting_on", "mute_pings", "review_after", "updated_at")
     list_filter = ("owner_department", "status", "category", "mute_pings")
-    search_fields = ("ref", "title", "person__cpr", "person__name")  # search by CPR
+    search_fields = ("ref", "title", "person__name")  # CPR matched via blind index
     autocomplete_fields = ("person", "category")
     filter_horizontal = ("circumstances",)   # user-friendly dual-list selector
     inlines = [CaseAssignmentInline, FollowUpInline, CaseLegalRefInline]
@@ -226,11 +228,12 @@ class StatusEventAdmin(ScopedAdmin):
 
 
 @admin.register(Document)
-class DocumentAdmin(ScopedAdmin):
+class DocumentAdmin(CprSearchMixin, ScopedAdmin):
     department_path = "case__owner_department_id"
+    cpr_bidx_paths = ("person__cpr_bidx",)
     list_display = ("label", "kind", "case", "person", "email_from", "source", "added_by", "added_at")
     list_filter = ("kind", "source")
-    search_fields = ("label", "case__ref", "person__cpr", "location", "email_from", "email_subject")
+    search_fields = ("label", "case__ref", "location", "email_from", "email_subject")  # CPR via blind index
     actions = [export_encrypted_zip]
 
     def get_actions(self, request):

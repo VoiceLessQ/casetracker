@@ -1,7 +1,30 @@
 from django.contrib import admin
+from django.db.models import Q
 
 from cases.models import Document
+from .crypto import blind_index_for_term
 from .models import Person, Relationship, PersonNote
+
+
+class CprSearchMixin:
+    """Restores CPR search on admins that key off a person's CPR, now that the
+    CPR is encrypted. If the search term looks like a CPR it is matched via the
+    blind index (exact, dash-tolerant); other terms fall through to the normal
+    search fields. Set `cpr_bidx_paths` to the lookup path(s) to the person's
+    cpr_bidx from this model."""
+
+    cpr_bidx_paths = ()
+
+    def get_search_results(self, request, queryset, search_term):
+        qs, distinct = super().get_search_results(request, queryset, search_term)
+        bidx = blind_index_for_term(search_term)
+        if bidx and self.cpr_bidx_paths:
+            cond = Q()
+            for path in self.cpr_bidx_paths:
+                cond |= Q(**{path: bidx})
+            qs = (qs | queryset.filter(cond)).distinct()
+            distinct = True
+        return qs, distinct
 
 
 class RelationshipInline(admin.TabularInline):
@@ -37,7 +60,9 @@ class PersonDocumentInline(admin.TabularInline):
 @admin.register(Person)
 class PersonAdmin(admin.ModelAdmin):
     list_display = ("name", "cpr", "address", "birth_date")
-    search_fields = ("cpr", "name", "address")   # <-- CPR / name / address search
+    # CPR is encrypted, so it isn't an icontains field; lookup() matches it via
+    # the blind index. Keep name/address here for the search box and autocomplete.
+    search_fields = ("name", "address")
     inlines = [RelationshipInline, PersonNoteInline, PersonDocumentInline]
 
     def get_search_results(self, request, queryset, search_term):
@@ -49,10 +74,11 @@ class PersonAdmin(admin.ModelAdmin):
 
 
 @admin.register(PersonNote)
-class PersonNoteAdmin(admin.ModelAdmin):
+class PersonNoteAdmin(CprSearchMixin, admin.ModelAdmin):
+    cpr_bidx_paths = ("person__cpr_bidx",)
     list_display = ("person", "created_at", "visibility", "author")
     list_filter = ("visibility",)
-    search_fields = ("person__cpr", "person__name", "text")
+    search_fields = ("person__name", "text")   # CPR handled via blind index
 
     # Append-only: notes can be added, never edited or deleted.
     def has_change_permission(self, request, obj=None):
@@ -63,8 +89,9 @@ class PersonNoteAdmin(admin.ModelAdmin):
 
 
 @admin.register(Relationship)
-class RelationshipAdmin(admin.ModelAdmin):
+class RelationshipAdmin(CprSearchMixin, admin.ModelAdmin):
+    cpr_bidx_paths = ("person__cpr_bidx", "relative__cpr_bidx")
     list_display = ("person", "relation", "relative", "ended_on", "ended_reason")
     list_filter = ("relation", "ended_reason")
-    search_fields = ("person__cpr", "person__name", "relative__cpr", "relative__name")
+    search_fields = ("person__name", "relative__name")   # CPR via blind index
     autocomplete_fields = ("person", "relative")

@@ -1,2 +1,3 @@
 Django>=5.0,<5.2
-pyzipper>=0.3,<0.4   # AES-256 encrypted zip export
+pyzipper>=0.3,<0.4       # AES-256 encrypted zip export
+cryptography>=41,<46    # at-rest field encryption (Fernet) + blind index

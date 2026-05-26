@@ -87,3 +87,12 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # not store them. (No DRIVE_FOLDER_PEPPER needed — folders are keyed on each
 # person's permanent internal uid, not on the CPR.)
 MUNICIPAL_DRIVE_ROOT = os.environ.get("MUNICIPAL_DRIVE_ROOT", str(BASE_DIR / "drive"))
+
+# Key for at-rest field encryption (e.g. the CPR). A stolen DB shows only
+# ciphertext for encrypted columns because the key lives here, not in the data.
+# OPERATIONAL WARNING: this key is required to read encrypted fields — LOSE IT
+# AND THE CPRs ARE UNRECOVERABLE. In production set it from a secret manager /
+# KMS, never commit a real key, and back it up separately from the database.
+FIELD_ENCRYPTION_KEY = os.environ.get(
+    "FIELD_ENCRYPTION_KEY", "dev-only-insecure-field-key-change-me"
+)
