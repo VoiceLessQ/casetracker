@@ -5,12 +5,14 @@ from django.db.models import Q
 from django.http import FileResponse
 from django.template.response import TemplateResponse
 from django.utils import timezone
+from django.utils.html import format_html, format_html_join
 
 from org.models import Department, Membership
 from people.access import can_open_person_documents
 from people.admin import CprSearchMixin
 
 from .exports import build_encrypted_zip, generate_password, safe_drive_path
+from .journal import JournalError, journalize
 from .models import (
     Case, StatusEvent, Document, FollowUp,
     CaseLog, CaseAssignment, CalendarEvent,
@@ -218,6 +220,34 @@ def export_encrypted_zip(modeladmin, request, queryset):
     })
 
 
+@admin.action(description="Journalize selected (assign journal number)")
+def journalize_documents(modeladmin, request, queryset):
+    """Register the selected documents as records on their case: assign a journal
+    number + date, after which they're immutable. Needs Member+ in the case's
+    department; skips drafts with no case, already-journalized docs, and
+    shielded docs the user can't access."""
+    done, skipped = [], []
+    for doc in queryset:
+        if not request.user.is_superuser:
+            dept_id = doc.case.owner_department_id if doc.case_id else None
+            if role_rank_in(request.user, dept_id) < MEMBER:
+                skipped.append((doc, "no edit access to the case"))
+                continue
+        try:
+            number = journalize(doc, request.user)
+            done.append((doc, number))
+        except JournalError as exc:
+            skipped.append((doc, str(exc)))
+    if done:
+        modeladmin.message_user(
+            request,
+            "Journalized: " + ", ".join(f"{d.label} → {n}" for d, n in done),
+            messages.SUCCESS,
+        )
+    for doc, why in skipped:
+        modeladmin.message_user(request, f"Skipped “{doc.label}”: {why}", messages.WARNING)
+
+
 class CaseAssignmentInline(admin.TabularInline):
     """Who is working this case — shown on the case page. Reassigning/handing
     off is a LEAD action: members see assignments but can't change them."""
@@ -268,6 +298,42 @@ class CaseAdmin(CprSearchMixin, ScopedAdmin):
     autocomplete_fields = ("person", "category")
     filter_horizontal = ("circumstances",)   # user-friendly dual-list selector
     inlines = [CaseAssignmentInline, FollowUpInline, CaseLegalRefInline]
+    readonly_fields = ("journal",)
+
+    @admin.display(description="Case journal (chronological record)")
+    def journal(self, obj):
+        """Read-only merged record: journalized documents + status handoffs +
+        narrative log entries, oldest first. The journalized documents are the
+        formal record; logs/handoffs give the surrounding history."""
+        if obj is None or obj.pk is None:
+            return "Save the case first to see its journal."
+        rows = []
+        for d in obj.documents.filter(journalized_at__isnull=False):
+            rows.append((d.journalized_at, format_html(
+                "<strong>{}</strong> · {} · {} <em>{}</em>",
+                d.journal_number, d.get_direction_display(), d.label, d.get_kind_display(),
+            )))
+        for e in obj.events.all():
+            change = []
+            if e.to_status:
+                change.append(f"status → {e.to_status}")
+            if e.to_department_id:
+                change.append(f"dept → {e.to_department}")
+            rows.append((e.timestamp, format_html(
+                "handoff: {} {}", ", ".join(change) or "—", f"({e.actor})",
+            )))
+        for log in obj.logs.all():
+            rows.append((log.created_at, format_html(
+                "{}: {} <em>({})</em>", log.get_kind_display(), log.text, log.author,
+            )))
+        if not rows:
+            return "No journalized documents or log entries yet."
+        rows.sort(key=lambda r: r[0])
+        items = format_html_join(
+            "", "<li>{} — {}</li>",
+            ((r[0].strftime("%Y-%m-%d %H:%M"), r[1]) for r in rows),
+        )
+        return format_html('<ol style="margin:0;padding-left:1.2em;">{}</ol>', items)
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         # A case can only be owned by a department where the user is MEMBER+;
@@ -292,10 +358,22 @@ class StatusEventAdmin(ScopedAdmin):
 class DocumentAdmin(CprSearchMixin, ScopedAdmin):
     department_path = "case__owner_department_id"
     cpr_bidx_paths = ("person__cpr_bidx",)
-    list_display = ("label", "kind", "case", "person", "email_from", "source", "added_by", "added_at")
-    list_filter = ("kind", "source")
-    search_fields = ("label", "case__ref", "location", "email_from", "email_subject")  # CPR via blind index
-    actions = [open_document, export_encrypted_zip]
+    list_display = ("label", "journal_number", "direction", "kind", "case", "person", "journalized_at", "added_by", "added_at")
+    list_filter = ("direction", "kind", "source")
+    search_fields = ("label", "journal_number", "case__ref", "location", "email_from", "email_subject")  # CPR via blind index
+    actions = [open_document, export_encrypted_zip, journalize_documents]
+
+    # Journalized documents are records: their journal fields are always read-only,
+    # and once journalized the content fields lock too (corrections go in new
+    # entries, never by rewriting the record).
+    _journal_fields = ("journal_number", "journal_sequence", "journalized_at", "journalized_by")
+    _content_fields = ("kind", "direction", "label", "location", "source", "case", "person")
+
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(super().get_readonly_fields(request, obj)) + list(self._journal_fields)
+        if obj is not None and obj.is_journalized:
+            ro += list(self._content_fields)
+        return tuple(dict.fromkeys(ro))
 
     def get_actions(self, request):
         actions = super().get_actions(request)
@@ -303,7 +381,16 @@ class DocumentAdmin(CprSearchMixin, ScopedAdmin):
         # shielding check); only leads/superusers may bulk-export.
         if not (request.user.is_superuser or max_role_rank(request.user) >= LEAD):
             actions.pop("export_encrypted_zip", None)
+        # Journalizing requires edit (Member+) rights somewhere.
+        if not (request.user.is_superuser or max_role_rank(request.user) >= MEMBER):
+            actions.pop("journalize_documents", None)
         return actions
+
+    def has_delete_permission(self, request, obj=None):
+        # A journalized document is a record and cannot be deleted by anyone.
+        if obj is not None and obj.is_journalized:
+            return False
+        return super().has_delete_permission(request, obj)
 
     def get_queryset(self, request):
         # Department-scope case-linked docs, but also include person-level docs

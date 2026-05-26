@@ -122,6 +122,11 @@ Append-only, never editable in admin:
 - `ExportEvent` — every export.
 - `DocumentAccessEvent` — every document open and blocked attempt.
 
+Records (journaling): a `Document` journalized onto a case gets a unique journal
+number + date (`journalize`, format via `JOURNAL_NUMBER_FORMAT`) and becomes
+**immutable** — its content fields lock and it cannot be deleted by anyone.
+The per-case journal is a read-only chronological view on the case page.
+
 ## Deployment checklist
 
 - [ ] `SECRET_KEY` set from the environment (not the dev default).

@@ -156,6 +156,11 @@ class Document(models.Model):
         GENERIC = "generic", "Document"
         EMAIL = "email", "Email"
 
+    class Direction(models.TextChoices):
+        INCOMING = "in", "Incoming"        # received from outside
+        OUTGOING = "out", "Outgoing"       # sent to outside
+        INTERNAL = "internal", "Internal"  # internal / working document
+
     # Either or both may be set. A document can attach to a person before any
     # case exists (onboarding a new / newborn person), to a case, or to both.
     case = models.ForeignKey(
@@ -172,12 +177,26 @@ class Document(models.Model):
     source = models.CharField(
         max_length=16, choices=Source.choices, default=Source.LINKED,
     )
+    direction = models.CharField(
+        max_length=8, choices=Direction.choices, default=Direction.INTERNAL,
+    )  # records direction: incoming / outgoing / internal correspondence
     # Email metadata (kind=EMAIL): kept so correspondence reads as a timeline.
     email_from = models.CharField(max_length=255, blank=True)
     email_subject = models.CharField(max_length=255, blank=True)
     email_sent_at = models.DateTimeField(null=True, blank=True)
     added_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     added_at = models.DateTimeField(auto_now_add=True)
+
+    # Journaling (records registration). A document starts as a DRAFT and is
+    # "journalized" onto a case: it gets a permanent journal number + date and
+    # becomes an immutable record. journalized_at NULL = not yet journalized.
+    journal_number = models.CharField(max_length=80, blank=True, db_index=True)
+    journal_sequence = models.PositiveIntegerField(null=True, blank=True)  # running no. within the case
+    journalized_at = models.DateTimeField(null=True, blank=True)
+    journalized_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        null=True, blank=True, related_name="documents_journalized",
+    )
 
     class Meta:
         ordering = ["-added_at"]
@@ -186,10 +205,25 @@ class Document(models.Model):
                 name="document_has_case_or_person",
                 check=models.Q(case__isnull=False) | models.Q(person__isnull=False),
             ),
+            models.UniqueConstraint(
+                fields=["journal_number"],
+                condition=~models.Q(journal_number=""),
+                name="uniq_document_journal_number",
+            ),
+            models.UniqueConstraint(
+                fields=["case", "journal_sequence"],
+                condition=models.Q(journal_sequence__isnull=False),
+                name="uniq_document_case_journal_sequence",
+            ),
         ]
 
+    @property
+    def is_journalized(self):
+        return self.journalized_at is not None
+
     def __str__(self):
-        return f"{self.label} → {self.location}"
+        tag = f"[{self.journal_number}] " if self.journal_number else ""
+        return f"{tag}{self.label} → {self.location}"
 
 
 class FollowUp(models.Model):

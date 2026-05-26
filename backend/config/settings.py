@@ -101,3 +101,8 @@ FIELD_ENCRYPTION_KEY = os.environ.get(
 # If empty, the backup key is derived from FIELD_ENCRYPTION_KEY. Set it (from a
 # secret manager) to keep backup access separate from field-decryption access.
 BACKUP_ENCRYPTION_KEY = os.environ.get("BACKUP_ENCRYPTION_KEY", "")
+
+# Journal number format. Placeholders: {ref} (the case number) and {seq} (the
+# running sequence within the case). Default is a per-case sequence, the most
+# portable scheme; override for a global/yearly register convention.
+JOURNAL_NUMBER_FORMAT = os.environ.get("JOURNAL_NUMBER_FORMAT", "{ref}-{seq:03d}")
