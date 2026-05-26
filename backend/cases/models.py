@@ -349,14 +349,37 @@ class CaseLegalRef(models.Model):
         return f"{self.case.ref} → {self.reference}{flag}"
 
 
+class CaseCategoryQuerySet(models.QuerySet):
+    def for_department(self, dept):
+        """Active categories a given department may use: ones explicitly linked
+        to it, plus global ones (no department set = available everywhere)."""
+        return (
+            self.filter(active=True)
+            .filter(models.Q(departments=dept) | models.Q(departments__isnull=True))
+            .distinct()
+        )
+
+
 class CaseCategory(models.Model):
     """Controlled case type. Free text can't reliably drive the regulation map;
     a fixed vocabulary can. Each category carries the regulations that apply to
-    it (via RegulationRule)."""
+    it (via RegulationRule).
+
+    Categories are department-scoped: which case types exist depends on which
+    department uses them. Leaving `departments` empty makes a category global
+    (available to every department) — for cross-cutting types like aktindsigt
+    or emnesag that every department handles."""
 
     code = models.SlugField(max_length=40, unique=True)
     name = models.CharField(max_length=120)
+    departments = models.ManyToManyField(
+        Department, blank=True, related_name="case_categories",
+        help_text="Departments that use this category. Leave empty to make it "
+                  "available to every department.",
+    )
     active = models.BooleanField(default=True)
+
+    objects = CaseCategoryQuerySet.as_manager()
 
     class Meta:
         ordering = ["name"]

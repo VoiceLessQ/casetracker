@@ -161,9 +161,24 @@ class CircumstanceRuleInline(admin.TabularInline):
 
 @admin.register(CaseCategory)
 class CaseCategoryAdmin(admin.ModelAdmin):
+    """Controlled vocab of case types. Which types exist depends on which
+    department uses them, so the list (and the autocomplete picker on the case
+    form, which routes through this get_queryset) is scoped to the user's
+    departments plus global categories. Superusers manage the whole catalog."""
     list_display = ("name", "code", "active")
+    list_filter = ("active", "departments")
     search_fields = ("name", "code")
+    filter_horizontal = ("departments",)
     inlines = [CategoryRuleInline]
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        depts = user_department_ids(request.user)
+        return qs.filter(
+            Q(departments__in=depts) | Q(departments__isnull=True)
+        ).distinct()
 
 
 @admin.register(Circumstance)
