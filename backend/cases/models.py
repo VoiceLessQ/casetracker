@@ -491,3 +491,36 @@ class ExportEvent(models.Model):
 
     def __str__(self):
         return f"{self.created_at:%Y-%m-%d %H:%M} {self.exported_by} ({self.document_count} docs)"
+
+
+class DocumentAccessEvent(models.Model):
+    """Append-only log of document OPEN attempts — allowed AND denied. Opening
+    is the access checkpoint that navigation must pass (guardrail #3); every
+    open, and every blocked attempt on a shielded person, is recorded with who,
+    what, and the outcome. Snapshots the label so the trail survives deletion."""
+
+    class Action(models.TextChoices):
+        OPEN = "open", "Open / download"
+        EXPORT = "export", "Export"
+
+    opened_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="document_opens",
+    )
+    document = models.ForeignKey(
+        Document, on_delete=models.SET_NULL, null=True, blank=True, related_name="access_events",
+    )
+    document_label = models.CharField(max_length=120)          # snapshot
+    person = models.ForeignKey(
+        "people.Person", on_delete=models.SET_NULL, null=True, blank=True, related_name="access_events",
+    )
+    action = models.CharField(max_length=8, choices=Action.choices, default=Action.OPEN)
+    allowed = models.BooleanField()
+    reason = models.CharField(max_length=255, blank=True)      # export reason, or why denied
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        verb = "opened" if self.allowed else "DENIED"
+        return f"{self.created_at:%Y-%m-%d %H:%M} {self.opened_by} {verb} {self.document_label}"

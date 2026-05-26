@@ -3,6 +3,11 @@
 <p><strong>{{ count }}</strong> document(s) packed into an encrypted zip.
 This export has been logged.</p>
 
+{% if denied_count %}
+<p style="color:#ba2121;"><strong>{{ denied_count }}</strong> shielded document(s) were
+excluded (no access grant); those blocked attempts were logged.</p>
+{% endif %}
+
 <div style="padding:1em;margin:1em 0;border:2px solid #ba2121;background:#fff4f4;">
   <p style="margin:0 0 .5em;"><strong>One-time password</strong> &mdash; copy it now.
   It is <strong>not stored</strong> and will not be shown again. If you lose it,

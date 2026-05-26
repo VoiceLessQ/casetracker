@@ -3,7 +3,7 @@ from django.db.models import Q
 
 from cases.models import Document
 from .crypto import blind_index_for_term
-from .models import Person, Relationship, PersonNote
+from .models import Person, Relationship, PersonNote, PersonAccessGrant
 
 
 class CprSearchMixin:
@@ -57,13 +57,24 @@ class PersonDocumentInline(admin.TabularInline):
     autocomplete_fields = ("case",)
 
 
+class PersonAccessGrantInline(admin.TabularInline):
+    """Grant a user permission to OPEN this (shielded) person's documents.
+    granted_by is stamped automatically. Revoke by setting an expiry date."""
+    model = PersonAccessGrant
+    extra = 0
+    fields = ("user", "reason", "expires_on", "granted_by", "created_at")
+    readonly_fields = ("granted_by", "created_at")
+    autocomplete_fields = ("user",)
+
+
 @admin.register(Person)
 class PersonAdmin(admin.ModelAdmin):
-    list_display = ("name", "cpr", "address", "birth_date")
+    list_display = ("name", "cpr", "address", "birth_date", "is_shielded")
+    list_filter = ("is_shielded",)
     # CPR/address are encrypted, so they aren't icontains fields. lookup()
     # matches name (partial) and CPR (exact, via blind index).
     search_fields = ("name",)
-    inlines = [RelationshipInline, PersonNoteInline, PersonDocumentInline]
+    inlines = [RelationshipInline, PersonNoteInline, PersonDocumentInline, PersonAccessGrantInline]
 
     def get_search_results(self, request, queryset, search_term):
         # Use the dash-tolerant lookup() everywhere this admin is searched —
@@ -71,6 +82,17 @@ class PersonAdmin(admin.ModelAdmin):
         if search_term:
             return queryset.lookup(search_term), False
         return queryset, False
+
+    def save_formset(self, request, form, formset, change):
+        # Stamp granted_by on new access grants created via the inline.
+        instances = formset.save(commit=False)
+        for obj in instances:
+            if isinstance(obj, PersonAccessGrant) and not obj.granted_by_id:
+                obj.granted_by = request.user
+            obj.save()
+        formset.save_m2m()
+        for obj in formset.deleted_objects:
+            obj.delete()
 
 
 @admin.register(PersonNote)
@@ -95,3 +117,19 @@ class RelationshipAdmin(CprSearchMixin, admin.ModelAdmin):
     list_filter = ("relation", "ended_reason")
     search_fields = ("person__name", "relative__name")   # CPR via blind index
     autocomplete_fields = ("person", "relative")
+
+
+@admin.register(PersonAccessGrant)
+class PersonAccessGrantAdmin(admin.ModelAdmin):
+    """Who may open which shielded person's documents. granted_by is stamped
+    automatically; revoke by setting an expiry date (kept as history)."""
+    list_display = ("person", "user", "granted_by", "created_at", "expires_on")
+    list_filter = ("created_at", "expires_on")
+    search_fields = ("person__name", "user__username", "reason")
+    autocomplete_fields = ("person", "user")
+    readonly_fields = ("granted_by", "created_at")
+
+    def save_model(self, request, obj, form, change):
+        if not obj.granted_by_id:
+            obj.granted_by = request.user
+        super().save_model(request, obj, form, change)

@@ -49,6 +49,12 @@ class Person(models.Model):
     address = EncryptedCharField(max_length=600, blank=True)           # ENCRYPTED (shielding case)
     birth_date = models.DateField(null=True, blank=True)
     note = EncryptedTextField(blank=True)                              # ENCRYPTED free personal-info text
+    is_shielded = models.BooleanField(
+        default=False,
+        help_text="Protected person (e.g. address protection / abuse case). "
+                  "Their documents can only be OPENED by users with an explicit "
+                  "access grant — navigation alone never suffices.",
+    )
 
     objects = PersonQuerySet.as_manager()
 
@@ -193,3 +199,35 @@ class PersonNote(models.Model):
 
     def __str__(self):
         return f"{self.person} · {self.created_at:%Y-%m-%d}"
+
+
+class PersonAccessGrant(models.Model):
+    """An explicit permission for one user to OPEN a shielded person's documents.
+
+    This is the heart of guardrail #3: navigation never implies access. Being
+    able to reach a person (search, family tree, a link) does NOT let you open
+    their documents — for a shielded person that requires one of these grants,
+    checked at the open/export action and logged. Revoke by setting `expires_on`
+    to a past date (kept as history, not deleted)."""
+
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="access_grants")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="document_access_grants",
+    )
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="access_grants_made",
+    )
+    reason = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_on = models.DateField(null=True, blank=True)   # NULL = no expiry
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def is_active(self, on=None):
+        from datetime import date
+        on = on or date.today()
+        return self.expires_on is None or self.expires_on >= on
+
+    def __str__(self):
+        return f"{self.user} → {self.person} (by {self.granted_by})"

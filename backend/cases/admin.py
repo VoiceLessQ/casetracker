@@ -2,18 +2,20 @@ import base64
 
 from django.contrib import admin, messages
 from django.db.models import Q
+from django.http import FileResponse
 from django.template.response import TemplateResponse
 from django.utils import timezone
 
 from org.models import Department, Membership
+from people.access import can_open_person_documents
 from people.admin import CprSearchMixin
 
-from .exports import build_encrypted_zip, generate_password
+from .exports import build_encrypted_zip, generate_password, safe_drive_path
 from .models import (
     Case, StatusEvent, Document, FollowUp,
     CaseLog, CaseAssignment, CalendarEvent,
     LegalReference, CaseLegalRef,
-    CaseCategory, RegulationRule, Circumstance, ExportEvent,
+    CaseCategory, RegulationRule, Circumstance, ExportEvent, DocumentAccessEvent,
 )
 
 
@@ -100,12 +102,59 @@ class ScopedAdmin(admin.ModelAdmin):
         return request.user.is_superuser
 
 
+def _log_access(user, doc, action, allowed, reason=""):
+    DocumentAccessEvent.objects.create(
+        opened_by=user, document=doc, document_label=doc.label, person=doc.person,
+        action=action, allowed=allowed, reason=reason,
+    )
+
+
+@admin.action(description="Open / download selected (access-checked, logged)")
+def open_document(modeladmin, request, queryset):
+    """Open a single document. This is the access checkpoint (guardrail #3):
+    being able to see/navigate to the document does not mean you may open it —
+    a shielded person's documents need an explicit grant. Every open, allowed
+    or denied, is logged."""
+    docs = list(queryset)
+    if len(docs) != 1:
+        modeladmin.message_user(
+            request, "Select exactly one document to open (use export for several).",
+            messages.WARNING,
+        )
+        return
+    doc = docs[0]
+    allowed = can_open_person_documents(request.user, doc.person)
+    _log_access(
+        request.user, doc, DocumentAccessEvent.Action.OPEN, allowed,
+        "" if allowed else "shielded person: no active access grant",
+    )
+    if not allowed:
+        modeladmin.message_user(
+            request,
+            f"Access denied: {doc.person} is shielded and you have no access grant. "
+            f"The attempt was logged.",
+            messages.ERROR,
+        )
+        return
+    path = safe_drive_path(doc.location)
+    if path is None:
+        modeladmin.message_user(
+            request,
+            f"'{doc.label}' is a link only — no file on the drive to open "
+            f"({doc.location}). The open was logged.",
+            messages.INFO,
+        )
+        return
+    return FileResponse(open(path, "rb"), as_attachment=True, filename=path.name)
+
+
 @admin.action(description="Export selected as encrypted zip")
 def export_encrypted_zip(modeladmin, request, queryset):
     """High-sensitivity, deliberate leak: pack the selected documents into one
     AES-256 encrypted zip with a one-time auto-generated password (shown once,
-    never stored), and log the export. Only leads/superusers may export, and
-    only documents already within their scope (the queryset is dept-scoped)."""
+    never stored), and log the export. Only leads/superusers may export; only
+    documents within their scope (the queryset is dept-scoped); and shielded
+    persons' documents are excluded unless the user has an access grant."""
     if not (request.user.is_superuser or max_role_rank(request.user) >= LEAD):
         modeladmin.message_user(
             request, "Only leads or superusers can export documents.", messages.ERROR
@@ -116,6 +165,11 @@ def export_encrypted_zip(modeladmin, request, queryset):
         modeladmin.message_user(request, "No documents selected.", messages.WARNING)
         return
 
+    # Access gate: split into what this user may open vs. shielded-without-grant.
+    allowed_docs, denied_docs = [], []
+    for d in docs:
+        (allowed_docs if can_open_person_documents(request.user, d.person) else denied_docs).append(d)
+
     common = {
         **modeladmin.admin_site.each_context(request),
         "opts": modeladmin.model._meta,
@@ -124,26 +178,32 @@ def export_encrypted_zip(modeladmin, request, queryset):
 
     if request.POST.get("confirm"):
         reason = (request.POST.get("reason") or "").strip()
+        for d in denied_docs:
+            _log_access(request.user, d, DocumentAccessEvent.Action.EXPORT, False,
+                        "shielded person: no active access grant")
         if not reason:
+            modeladmin.message_user(request, "A reason is required to export.", messages.ERROR)
+        elif not allowed_docs:
             modeladmin.message_user(
-                request, "A reason is required to export.", messages.ERROR
+                request,
+                "All selected documents belong to shielded persons you have no "
+                "access to. Nothing exported; the attempts were logged.",
+                messages.ERROR,
             )
         else:
             password = generate_password()
-            zip_bytes, manifest, sha256 = build_encrypted_zip(docs, password)
+            zip_bytes, manifest, sha256 = build_encrypted_zip(allowed_docs, password)
             ExportEvent.objects.create(
-                exported_by=request.user,
-                document_count=len(docs),
-                reason=reason,
-                manifest=manifest,
-                sha256=sha256,
+                exported_by=request.user, document_count=len(allowed_docs),
+                reason=reason, manifest=manifest, sha256=sha256,
             )
             return TemplateResponse(request, "admin/cases/export_result.html", {
                 **common,
                 "title": "Encrypted export ready",
                 "password": password,
                 "sha256": sha256,
-                "count": len(docs),
+                "count": len(allowed_docs),
+                "denied_count": len(denied_docs),
                 "zip_b64": base64.b64encode(zip_bytes).decode("ascii"),
                 "filename": f"casetracker-export-{timezone.now():%Y%m%d-%H%M%S}.zip",
             })
@@ -151,7 +211,8 @@ def export_encrypted_zip(modeladmin, request, queryset):
     return TemplateResponse(request, "admin/cases/export_confirm.html", {
         **common,
         "title": "Confirm encrypted export",
-        "documents": docs,
+        "documents": allowed_docs,
+        "denied_count": len(denied_docs),
         "selected": [str(d.pk) for d in docs],
         "action_checkbox_name": admin.helpers.ACTION_CHECKBOX_NAME,
     })
@@ -234,11 +295,12 @@ class DocumentAdmin(CprSearchMixin, ScopedAdmin):
     list_display = ("label", "kind", "case", "person", "email_from", "source", "added_by", "added_at")
     list_filter = ("kind", "source")
     search_fields = ("label", "case__ref", "location", "email_from", "email_subject")  # CPR via blind index
-    actions = [export_encrypted_zip]
+    actions = [open_document, export_encrypted_zip]
 
     def get_actions(self, request):
         actions = super().get_actions(request)
-        # Only leads/superusers see the export action at all.
+        # Anyone who can see a document may open it (subject to the per-open
+        # shielding check); only leads/superusers may bulk-export.
         if not (request.user.is_superuser or max_role_rank(request.user) >= LEAD):
             actions.pop("export_encrypted_zip", None)
         return actions
@@ -310,6 +372,32 @@ class ExportEventAdmin(admin.ModelAdmin):
         if request.user.is_superuser:
             return qs
         return qs.filter(exported_by=request.user)
+
+
+@admin.register(DocumentAccessEvent)
+class DocumentAccessEventAdmin(admin.ModelAdmin):
+    """Append-only audit trail of document opens (and blocked attempts). Created
+    only by the open/export flow; never editable or deletable. Superusers see
+    all; others see only their own."""
+    list_display = ("created_at", "opened_by", "action", "allowed", "document_label", "person", "reason")
+    list_filter = ("action", "allowed", "created_at")
+    search_fields = ("document_label", "reason", "opened_by__username")
+    readonly_fields = ("opened_by", "document", "document_label", "person", "action", "allowed", "reason", "created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return obj is None
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(opened_by=request.user)
 
 
 @admin.register(CalendarEvent)

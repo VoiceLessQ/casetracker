@@ -4,6 +4,12 @@
 single <strong>AES-256 encrypted zip</strong>. A one-time password will be generated
 and shown <strong>once</strong>. This export will be logged against your account.</p>
 
+{% if denied_count %}
+<p style="color:#ba2121;"><strong>{{ denied_count }}</strong> selected document(s) belong to
+shielded persons you have no access grant for and will be <strong>excluded</strong>
+(the blocked attempt is logged).</p>
+{% endif %}
+
 <ul>
   {% for d in documents %}
     <li>{{ d.label }} &mdash; <code>{{ d.location }}</code></li>
