@@ -12,14 +12,14 @@ from people.access import can_open_person_documents
 from people.admin import CprSearchMixin
 
 from .exports import build_encrypted_zip, generate_password, safe_drive_path
-from .handoff import HandoffError, approve_handoff, reject_handoff
+from .handoff import HandoffError, approve_handoff, reject_handoff, handoff_blockers
 from .journal import JournalError, journalize
 from .models import (
     Case, StatusEvent, Document, FollowUp,
     CaseLog, CaseAssignment, CalendarEvent,
     LegalReference, CaseLegalRef,
     CaseCategory, RegulationRule, Circumstance, ExportEvent, DocumentAccessEvent,
-    CaseHandoff,
+    CaseHandoff, DocumentType,
 )
 
 
@@ -300,7 +300,21 @@ class CaseAdmin(CprSearchMixin, ScopedAdmin):
     autocomplete_fields = ("person", "category")
     filter_horizontal = ("circumstances",)   # user-friendly dual-list selector
     inlines = [CaseAssignmentInline, FollowUpInline, CaseLegalRefInline]
-    readonly_fields = ("journal",)
+    readonly_fields = ("outstanding", "journal")
+
+    @admin.display(description="Outstanding before handoff / close")
+    def outstanding(self, obj):
+        """What's still missing before this case is complete enough to move on —
+        required category, person, legal basis, and required document types."""
+        if obj is None or obj.pk is None:
+            return "Save the case first."
+        blockers = handoff_blockers(obj)
+        if not blockers:
+            return "Complete — ready to hand off."
+        return format_html(
+            '<ul style="margin:0;color:#ba2121;">{}</ul>',
+            format_html_join("", "<li>{}</li>", ((b,) for b in blockers)),
+        )
 
     @admin.display(description="Case journal (chronological record)")
     def journal(self, obj):
@@ -387,8 +401,8 @@ class StatusEventAdmin(ScopedAdmin):
 class DocumentAdmin(CprSearchMixin, ScopedAdmin):
     department_path = "case__owner_department_id"
     cpr_bidx_paths = ("person__cpr_bidx",)
-    list_display = ("label", "journal_number", "direction", "kind", "case", "person", "journalized_at", "added_by", "added_at")
-    list_filter = ("direction", "kind", "source")
+    list_display = ("label", "document_type", "journal_number", "direction", "kind", "case", "person", "journalized_at", "added_by", "added_at")
+    list_filter = ("direction", "kind", "source", "document_type")
     search_fields = ("label", "journal_number", "case__ref", "location", "email_from", "email_subject")  # CPR via blind index
     actions = [open_document, export_encrypted_zip, journalize_documents]
 
@@ -396,7 +410,7 @@ class DocumentAdmin(CprSearchMixin, ScopedAdmin):
     # and once journalized the content fields lock too (corrections go in new
     # entries, never by rewriting the record).
     _journal_fields = ("journal_number", "journal_sequence", "journalized_at", "journalized_by")
-    _content_fields = ("kind", "direction", "label", "location", "source", "case", "person")
+    _content_fields = ("kind", "direction", "document_type", "label", "location", "source", "case", "person")
 
     def get_readonly_fields(self, request, obj=None):
         ro = list(super().get_readonly_fields(request, obj)) + list(self._journal_fields)
@@ -616,8 +630,15 @@ class CaseCategoryAdmin(admin.ModelAdmin):
     list_display = ("name", "code", "active")
     list_filter = ("active", "departments")
     search_fields = ("name", "code")
-    filter_horizontal = ("departments",)
+    filter_horizontal = ("departments", "required_document_types")
     inlines = [CategoryRuleInline]
+
+
+@admin.register(DocumentType)
+class DocumentTypeAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "active")
+    list_filter = ("active",)
+    search_fields = ("name", "code")
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)

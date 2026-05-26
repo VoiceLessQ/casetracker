@@ -162,7 +162,8 @@ etc.), a department move goes through an approved **handoff**:
 - It can only be **approved by a department head (Lead) of the holding
   department**, and approval is **blocked until the case is complete** —
   `handoff_blockers(case)` checks the required items (category set, person
-  linked, every `level=required` regulation rule's reference actually linked).
+  linked, every `level=required` regulation rule's reference actually linked,
+  and a document of each of the category's required `DocumentType`s attached).
 - On approval the case's `owner_department` moves and a `StatusEvent` records the
   handoff (from/to department, actor). Rejection is recorded with a reason.
 - Direct department changes are otherwise locked for non-superusers, so the

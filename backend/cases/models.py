@@ -180,6 +180,10 @@ class Document(models.Model):
     direction = models.CharField(
         max_length=8, choices=Direction.choices, default=Direction.INTERNAL,
     )  # records direction: incoming / outgoing / internal correspondence
+    document_type = models.ForeignKey(
+        "DocumentType", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="documents",
+    )  # controlled type; used to satisfy a category's required-document list
     # Email metadata (kind=EMAIL): kept so correspondence reads as a timeline.
     email_from = models.CharField(max_length=255, blank=True)
     email_subject = models.CharField(max_length=255, blank=True)
@@ -411,6 +415,11 @@ class CaseCategory(models.Model):
         help_text="Departments that use this category. Leave empty to make it "
                   "available to every department.",
     )
+    required_document_types = models.ManyToManyField(
+        "DocumentType", blank=True, related_name="required_by_categories",
+        help_text="Document types that must be attached to a case of this "
+                  "category before it can be handed off.",
+    )
     active = models.BooleanField(default=True)
 
     objects = CaseCategoryQuerySet.as_manager()
@@ -598,3 +607,20 @@ class CaseHandoff(models.Model):
 
     def __str__(self):
         return f"{self.case.ref}: {self.from_department} → {self.to_department} ({self.status})"
+
+
+class DocumentType(models.Model):
+    """Controlled vocabulary of document types (e.g. consent form, ID
+    verification, assessment report). A CaseCategory can require certain types;
+    a case isn't complete until a document of each required type is attached to
+    it (see cases.handoff.handoff_blockers)."""
+
+    code = models.SlugField(max_length=40, unique=True)
+    name = models.CharField(max_length=120)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name

@@ -40,6 +40,16 @@ def handoff_blockers(case):
     for rule in case.applicable_rules():
         if rule.level == RegulationRule.Level.REQUIRED and rule.reference_id not in linked:
             blockers.append(f"Missing required legal basis: {rule.reference}")
+
+    # Required document types for the category must each be attached to the case.
+    if case.category_id:
+        present = set(
+            case.documents.filter(document_type__isnull=False)
+            .values_list("document_type_id", flat=True)
+        )
+        for dt in case.category.required_document_types.all():
+            if dt.id not in present:
+                blockers.append(f"Missing required document: {dt.name}")
     return blockers
 
 
