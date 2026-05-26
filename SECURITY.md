@@ -8,6 +8,17 @@ local synthetic-data sandbox.
 > It must never hold a real CPR, real name/address, or real citizen record, and
 > must never connect to a real CPR register, MitID, or system of record.
 
+## Before any real data — governance, not just code
+
+The controls below are necessary but **not sufficient** to hold real citizen
+data. Custom-built cryptography and access control on regulated personal data
+require, at minimum: an **independent security review** of the crypto and data
+handling, a **named data controller** accountable for it, a documented
+key-management procedure, and a lawful basis for processing. Good security code
+raises the bar for who may operate the system — it does not remove the need for
+institutional ownership and external audit. **Do not run this on real data on
+the strength of this document, or one author's implementation, alone.**
+
 ## Design posture
 
 - **Index, not vault.** The database stores *links* (`Document.location`) and
@@ -42,6 +53,20 @@ Keys (see `people/crypto.py`) are derived via HKDF from a single master secret:
 > **OPERATIONAL WARNING:** lose `FIELD_ENCRYPTION_KEY` and the encrypted fields
 > are unrecoverable. In production set it from a secret manager / KMS, never
 > commit it, and back it up **separately** from the database.
+
+**What this does and does NOT protect.** Encryption at rest protects a *stolen
+database file or backup*. It does **nothing** against a compromised application
+server or an authorised/malicious insider — both see plaintext, because the app
+must decrypt to function. So the real security posture is key management: where
+the master key lives, who can reach it, and how it rotates — not the cipher.
+
+**Blind-index caveat.** `cpr_bidx` is a *keyed* HMAC (not a plain hash), so it
+reveals nothing on its own. But a CPR is low-entropy (well under ~30 bits of
+real variation), so if the master key leaks an attacker can brute-force the
+index offline and re-identify every CPR. Field encryption and the blind index
+derive from the **same** master key — that one secret compromises both. This is
+the same low-entropy trap as any hash over a CPR; the keyed HMAC only holds
+while the key is secret.
 
 ## 2. Encrypted backups
 
@@ -99,6 +124,19 @@ Opening a document is a checkpoint **separate from navigation**:
 For non-shielded persons, department scope remains the access boundary; opens
 are still logged.
 
+**Scope of the gate — read carefully; shielding here is PARTIAL.** The check is
+on opening the document *content* (the Open/download action and export). It does
+**not** hide a shielded person from navigation, and it does **not** cover:
+- the person's own decrypted fields (address, notes) on the Person page — any
+  in-scope staff who open the record see them;
+- document-list metadata (that a document exists, its label) in the changelist;
+- search results, family-tree traversal, and counts (existence leaks).
+
+A complete shielding implementation must gate **every** read path, because a
+gate on one path with leaks on the others looks safe but isn't. Today only
+document *opening/export* is gated. The biggest open gap is the person record's
+own decrypted fields, not the document view.
+
 ## 4. Exporting documents (the controlled leak)
 
 `Export selected as encrypted zip` (Lead/superuser only):
@@ -123,9 +161,16 @@ Append-only, never editable in admin:
 - `DocumentAccessEvent` — every document open and blocked attempt.
 
 Records (journaling): a `Document` journalized onto a case gets a unique journal
-number + date (`journalize`, format via `JOURNAL_NUMBER_FORMAT`) and becomes
-**immutable** — its content fields lock and it cannot be deleted by anyone.
-The per-case journal is a read-only chronological view on the case page.
+number + date (`journalize`, format via `JOURNAL_NUMBER_FORMAT`). It is then
+**immutable at the application layer** — the admin locks its content fields and
+blocks deletion. This is append-only *enforcement*, NOT tamper-evidence: anyone
+with direct database access can still alter rows. Real tamper-evidence (hash-
+chaining, signed entries, or WORM storage) is **not** implemented. The per-case
+journal is a read-only chronological view on the case page.
+
+> All "append-only / never editable" claims in this document mean *enforced in
+> the application/admin layer*. None of them are tamper-proof against direct
+> database or filesystem access — that requires storage-level controls.
 
 ## Deployment checklist
 
@@ -144,8 +189,13 @@ The per-case journal is a read-only chronological view on the case page.
 
 Be honest about these — do not treat the prototype as production-hardened:
 
-- **Access gate covers the shielding case only.** Non-shielded citizens rely on
-  department scope, not per-citizen grants. Opens are logged, not pre-authorised.
+- **Shielding is partial** — only document *opening/export* is gated, not the
+  person's own decrypted fields, document-list metadata, search, or existence
+  (see "Scope of the gate" above). Non-shielded citizens rely on department
+  scope, not per-citizen grants; opens are logged, not pre-authorised.
+- **Key management is the whole posture, and it's external to this code.** One
+  master key protects field confidentiality *and* the CPR blind index; its
+  storage/rotation/access is the real control and is not solved here.
 - **Impersonation** (`testing` app) is superuser-only but **not audited** — a
   real deployment must log every impersonation and every action taken while
   impersonating, and restrict it far more tightly. Consider removing the
