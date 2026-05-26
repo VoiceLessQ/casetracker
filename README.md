@@ -10,7 +10,9 @@ data. It must never connect to a real CPR register or real records.
 
 See [SECURITY.md](SECURITY.md) for the security model (encryption at rest,
 access control, the document access gate, encrypted backups) and a deployment
-checklist.
+checklist, and [ARCHITECTURE.md](ARCHITECTURE.md) for where this is headed — a
+thin dashboard/index overlay over the municipality's Microsoft 365 drive and
+Outlook, with identity and roles from Entra.
 
 ## Run it
 
