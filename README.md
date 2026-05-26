@@ -8,6 +8,10 @@ that live on the municipality's own drive. It is an index, not a vault.
 This prototype is shaped like a real system but must only ever hold synthetic
 data. It must never connect to a real CPR register or real records.
 
+See [SECURITY.md](SECURITY.md) for the security model (encryption at rest,
+access control, the document access gate, encrypted backups) and a deployment
+checklist.
+
 ## Run it
 
 ```bash
@@ -24,6 +28,9 @@ Open http://127.0.0.1:8000/admin/ and log in.
 Optional environment:
 - `MUNICIPAL_DRIVE_ROOT` — where document links point (defaults to `backend/drive`).
 - `SECRET_KEY`, `DEBUG=0`, `ALLOWED_HOSTS` — set before exposing anywhere.
+- `FIELD_ENCRYPTION_KEY` — encrypts sensitive fields at rest (CPR, notes,
+  address). Set from a secret manager; losing it makes those fields
+  unrecoverable. `BACKUP_ENCRYPTION_KEY` — optional, for `manage.py backup_db`.
 
 ## Apps
 
