@@ -1,0 +1,34 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p>Use this only when you genuinely need to reach a person outside your
+department's scope. It requires a reason, and <strong>every break-the-glass
+search is logged loudly and reviewed</strong>. It does not reveal shielded
+persons you have no grant for.</p>
+
+<form method="post">{% csrf_token %}
+  <p>
+    <label for="reason">Reason (required, logged):</label><br>
+    <input type="text" id="reason" name="reason" size="70" required value="{{ reason }}"
+           placeholder="e.g. cross-department coordination on case T-204">
+  </p>
+  <p>
+    <label for="q">Name or CPR:</label><br>
+    <input type="text" id="q" name="q" size="40" required value="{{ q }}">
+  </p>
+  <input type="submit" class="default" value="Search (break the glass)">
+  <a href="../" class="button cancel-link">Cancel</a>
+</form>
+
+{% if done %}
+  <h2>Results ({{ results|length }})</h2>
+  {% if results %}
+    <ul>
+      {% for p in results %}
+        <li><a href="../{{ p.pk }}/change/">{{ p }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No matches (the lookup was still logged).</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

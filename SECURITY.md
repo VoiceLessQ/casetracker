@@ -124,6 +124,27 @@ Opening a document is a checkpoint **separate from navigation**:
 For non-shielded persons, department scope remains the access boundary; opens
 are still logged.
 
+### Search (snooping is the dominant risk)
+The recurring breach in systems like this is an authorised worker looking up
+someone they have no business looking at. Search is access, so it is **scoped
+and accountable**, not protected by the cipher:
+- **Scoped** — `people.access.searchable_persons` limits a worker to people they
+  have a reason to reach (subjects of their departments' cases); browsing the
+  whole citizen base is closed. **Intake/borgerservice** is a role
+  (`people.search_all_persons`, the `Borgerservice (intake)` group) with a
+  legitimately broad scope, so onboarding isn't stranded.
+- **Logged** — every explicit search writes an append-only `SearchEvent`. To
+  avoid re-importing the CPR, a **hit logs the matched person (uid), not the
+  term**; only a **miss stores the raw term**. The `SearchEvent` log is itself a
+  sensitive PII surface and is **oversight-only (superuser)**.
+- **Shielded persons are existence-hidden** from search/browse for anyone
+  without a grant — a search won't even confirm the record exists.
+- **Break-the-glass** (`/admin/people/person/break-glass/`) lets a caseworker
+  reach outside their scope, but demands a stated reason and is logged loudly
+  (`break_glass=True`) for review. It never reveals shielded-without-grant. It's
+  the rare exception; routine broad search is the intake role, so the flag stays
+  meaningful.
+
 **Scope of the gate — read carefully; shielding here is PARTIAL.** The check is
 on opening the document *content* (the Open/download action and export). It does
 **not** hide a shielded person from navigation, and it does **not** cover:
@@ -189,10 +210,11 @@ journal is a read-only chronological view on the case page.
 
 Be honest about these — do not treat the prototype as production-hardened:
 
-- **Shielding is partial** — only document *opening/export* is gated, not the
-  person's own decrypted fields, document-list metadata, search, or existence
-  (see "Scope of the gate" above). Non-shielded citizens rely on department
-  scope, not per-citizen grants; opens are logged, not pre-authorised.
+- **Shielding now covers documents AND search** (existence-hidden in
+  search/browse), but still not the person's own decrypted fields on the Person
+  change page if a worker reaches it in scope, nor document-list metadata. Treat
+  shielding as strong-but-not-total. Non-shielded citizens rely on department
+  scope, not per-citizen grants; opens and searches are logged.
 - **Key management is the whole posture, and it's external to this code.** One
   master key protects field confidentiality *and* the CPR blind index; its
   storage/rotation/access is the real control and is not solved here.
@@ -205,5 +227,8 @@ Be honest about these — do not treat the prototype as production-hardened:
 - **`StatusEvent`** is not auto-created on status/department change (manual).
 - **Name and `birth_date`** are not encrypted (name must stay searchable;
   encrypting it would disable partial-name lookup).
-- **No rate-limiting / enumeration protection** on the CPR/name lookup.
+- Search is now scoped + logged + break-the-glass, but there's **no rate-limiting
+  and no automated review** of the search log yet — the oversight value depends
+  on someone actually reading it (start with the break-glass filter). A
+  "searches not followed by a case action" report is the high-signal next step.
 - **No tests, no non-admin frontend, no real drive integration** yet.

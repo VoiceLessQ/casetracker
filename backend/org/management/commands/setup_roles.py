@@ -32,6 +32,7 @@ VIEW_MODELS = [
 ]
 
 CASEWORKER_GROUP = "Caseworker"
+INTAKE_GROUP = "Borgerservice (intake)"
 
 
 class Command(BaseCommand):
@@ -55,11 +56,26 @@ class Command(BaseCommand):
         perms = list(self._perms(EDIT_MODELS, ("view", "add", "change")))
         perms += list(self._perms(VIEW_MODELS, ("view",)))
         group.permissions.set(perms)
+
+        # Borgerservice / intake: the routine broad-search role. Caseworkers are
+        # scoped to their departments' people; intake can find/register anyone
+        # (logged hard, but without the break-the-glass friction). This is RBAC
+        # for the routine — break-the-glass stays reserved for the exception.
+        intake, _ = Group.objects.get_or_create(name=INTAKE_GROUP)
+        intake.permissions.set(
+            Permission.objects.filter(
+                content_type=ContentType.objects.get(app_label="people", model="person"),
+                codename="search_all_persons",
+            )
+        )
+
         self.stdout.write(
             self.style.SUCCESS(
                 f"'{CASEWORKER_GROUP}' group ready with {len(perms)} permissions.\n"
+                f"'{INTAKE_GROUP}' group ready (broad citizen search for intake).\n"
                 "Provision a caseworker: tick 'Staff status', add the "
                 "'Caseworker' group, then set their department role(s) in the "
-                "membership inline on the user page."
+                "membership inline on the user page. Front-desk/borgerservice also "
+                f"get the '{INTAKE_GROUP}' group."
             )
         )

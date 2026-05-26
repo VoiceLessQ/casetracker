@@ -60,6 +60,9 @@ class Person(models.Model):
 
     class Meta:
         ordering = ["name"]
+        permissions = [
+            ("search_all_persons", "Can search the whole citizen base (intake / borgerservice)"),
+        ]
         constraints = [
             # CPR uniqueness moved off the (now non-deterministic) ciphertext
             # onto the blind index; only enforced for people who have a CPR.
@@ -231,3 +234,35 @@ class PersonAccessGrant(models.Model):
 
     def __str__(self):
         return f"{self.user} → {self.person} (by {self.granted_by})"
+
+
+class SearchEvent(models.Model):
+    """Append-only log of person searches — search is access, so it's recorded.
+
+    To avoid re-importing the CPR we worked to remove, the raw term is stored
+    ONLY on a miss (no person to point at); on a hit we record the matched
+    people (the uid we now know they looked at), not the term. Oversight-only:
+    this log is itself a sensitive PII surface."""
+
+    class Kind(models.TextChoices):
+        NAME = "name", "Name"
+        CPR = "cpr", "CPR"
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="person_searches",
+    )
+    kind = models.CharField(max_length=8, choices=Kind.choices, default=Kind.NAME)
+    term = models.CharField(max_length=255, blank=True)        # stored only on a miss
+    matched = models.ManyToManyField(Person, blank=True, related_name="search_hits")  # on a hit
+    result_count = models.PositiveIntegerField(default=0)
+    break_glass = models.BooleanField(default=False)           # reached outside own scope
+    reason = models.CharField(max_length=255, blank=True)      # required for break-glass
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        what = self.term or f"{self.result_count} match(es)"
+        glass = " [BREAK-GLASS]" if self.break_glass else ""
+        return f"{self.created_at:%Y-%m-%d %H:%M} {self.actor} searched {self.kind}: {what}{glass}"
