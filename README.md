@@ -156,17 +156,40 @@ material. As a superuser:
 This is a **testing tool**. Real impersonation is a high-trust, audited
 capability; restrict and log it far more tightly before any real use.
 
-## Not built yet
+## Roadmap / TODO
 
-- **Microsoft 365 / Graph track**: SSO/Entra federation + MFA, multi-tenant,
-  SharePoint/OneDrive document storage, mail capture, Outlook calendar.
-- **Native dashboard actions** (accept case / add follow-up) — today they link
-  into the admin.
-- **Detection/alerting** (large exports, searches with no follow-up),
-  retention/purge, tamper-evident audit shipped to an external/SIEM store.
-- Tests, a non-admin frontend, and real drive integration.
+A transparent list of what *may* come — ideas and parked work, **not promises or
+a schedule**. Most of these are detailed in [ARCHITECTURE.md](ARCHITECTURE.md) /
+[SECURITY.md](SECURITY.md).
 
-See ARCHITECTURE.md for the target and SECURITY.md's "deferred hardening" list.
+**Refinement (near-term)**
+- [ ] Broader testing — an automated suite over the security-critical paths
+- [ ] UI polish + native dashboard actions (accept a case, add a follow-up) so
+      common actions don't bounce into the admin
+- [ ] Finish i18n — wrap model/admin labels; native-speaker review of the Danish
+
+**Casework engine**
+- [ ] Auto-attach regulations when a circumstance is ticked (drop them on untick)
+- [ ] Work guide ("how we do things") — drive-doc links per department / category
+      / circumstance, shown on the case
+- [ ] Per-department configurable statuses (custom labels over fixed kinds)
+- [ ] A distinct terminal closure (e.g. deceased) separate from per-department "done"
+- [ ] Family-tree visualisation (the relationship data exists; no rendering yet)
+
+**Microsoft 365 / Graph integration**
+- [ ] SSO via Entra (+ inherited MFA), multi-tenant (per municipality)
+- [ ] Documents on SharePoint/OneDrive, opened with the drive enforcing access
+- [ ] Email capture (mail trails) and Outlook calendar (one-way, privacy-minimal)
+
+**Hardening & operations**
+- [ ] Encryption keys in a KMS / Key Vault, isolated from the database
+- [ ] Tamper-evident audit shipped to an external / append-only store (SIEM)
+- [ ] Detection (oversized exports, searches with no follow-up), retention/purge
+- [ ] Least-privilege over time (access expires on case close / role change)
+
+**Before any real data (not code)**
+- [ ] Independent security review
+- [ ] Named data controller + lawful basis for processing
 
 ## License
 
