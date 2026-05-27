@@ -31,6 +31,44 @@ the strength of this document, or one author's implementation, alone.**
 - **Append-only history.** `CaseLog`, `PersonNote`, `StatusEvent`, `ExportEvent`,
   and `DocumentAccessEvent` are added, never edited or deleted.
 
+## Threat model — what a compromised network actually gets
+
+If an attacker reaches the local network (a server, a share, a backup), what can
+they actually read? Stated honestly, because each line is easy to over-hear as
+more reassuring than it is:
+
+- **Stolen files → ciphertext.** A copied database or backup yields ciphertext
+  for the encrypted fields (CPR, address, notes), and the documents aren't here
+  at all (index, not vault). Useless without the key. This is the real win.
+- **But "only metadata" is not "fine".** What stays in plaintext — names, the
+  fact that a person *has* a case in a given department, the category, mail-trail
+  subjects, journal entries — is sensitive PII on its own. "X has a
+  child-protection case in Social" is a serious disclosure with no document
+  attached. A metadata-only breach is a *smaller* incident, not a non-incident.
+- **A stolen account is the dangerous case, and crypto does not help there.** A
+  logged-in session decrypts for whoever holds it, so encryption-at-rest gives
+  nothing against a hijacked account. What limits the damage is **department
+  scoping** (they see one department, not the whole base — the real control
+  here), **logging** (every open/search/export is attributable), and **how fast
+  the account can be disabled**. On-screen PII masking is a speed-bump with an
+  audit trail, not a barrier — a logged-in attacker can usually trigger the
+  reveal; it just gets recorded.
+
+### Key isolation is a HARD REQUIREMENT, not a feature
+
+Everything above depends on one thing the **code cannot enforce**: the
+encryption key must live somewhere the network attacker can't reach — a secret
+manager / KMS / a mounted secret on separate infrastructure — **never on the
+same host as the database**. The code only makes isolation *possible*
+(`FIELD_ENCRYPTION_KEY_FILE`, a pluggable KMS provider); the **deployer** makes
+it *true*.
+
+> **The encryption model is void the moment the key sits beside the data.**
+> Treat key isolation as a precondition for handling real data, not a
+> nice-to-have — it is the single control the application cannot guarantee for
+> you, and the blind index (low-entropy CPR) is brute-forceable the instant the
+> key leaks.
+
 ## 1. Encryption at rest
 
 Sensitive fields are encrypted in the database with authenticated encryption
@@ -243,8 +281,9 @@ journal is a read-only chronological view on the case page.
 - [ ] `SECRET_KEY` set from the environment (not the dev default).
 - [ ] `DEBUG=0`.
 - [ ] `ALLOWED_HOSTS` set to the real host(s).
-- [ ] `FIELD_ENCRYPTION_KEY` (and ideally `BACKUP_ENCRYPTION_KEY`) from a secret
-      manager; backed up separately from the database.
+- [ ] **Encryption key isolated from the database host** — from a secret manager
+      / KMS / mounted secret, never on the same box as the DB (the model is void
+      otherwise). Backed up separately. `BACKUP_ENCRYPTION_KEY` likewise.
 - [ ] Database on an encrypted volume; `backup_db` scheduled; restores tested.
 - [ ] HTTPS only; secure/HTTPOnly cookies; HSTS.
 - [ ] `python manage.py setup_roles`; users provisioned with the `Caseworker`
