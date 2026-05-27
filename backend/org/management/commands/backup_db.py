@@ -16,6 +16,7 @@ WAL/journal are protected at rest too. For Postgres, pipe `pg_dump` through this
 same key instead (the SQLite path below is prototype-specific).
 """
 import datetime as dt
+import shutil
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -34,6 +35,16 @@ class Command(BaseCommand):
             "--output-dir",
             default=None,
             help="Where to write the .enc file (default: <BASE_DIR>/backups).",
+        )
+        parser.add_argument(
+            "--also-copy-to",
+            action="append",
+            default=[],
+            metavar="DIR",
+            help="Also drop the encrypted backup into this directory (repeatable). "
+                 "Point it at a DIFFERENT volume / mounted offsite share — a second "
+                 "folder on the same disk isn't real redundancy. The .enc is "
+                 "ciphertext, so copying it to less-trusted storage is safe.",
         )
 
     def handle(self, *args, **options):
@@ -63,10 +74,20 @@ class Command(BaseCommand):
         stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
         out = out_dir / f"casetracker-{stamp}.sqlite3.enc"
         out.write_bytes(token)
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Encrypted backup written: {out} "
-                f"({len(raw)} bytes plaintext -> {len(token)} bytes ciphertext).\n"
-                f"Restore with: manage.py restore_db {out} --output restored.sqlite3"
-            )
+
+        copies = []
+        for extra in options["also_copy_to"]:
+            dest_dir = Path(extra)
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / out.name
+            shutil.copy2(out, dest)
+            copies.append(str(dest))
+
+        msg = (
+            f"Encrypted backup written: {out} "
+            f"({len(raw)} bytes plaintext -> {len(token)} bytes ciphertext)."
         )
+        if copies:
+            msg += "\nAlso copied to:\n  " + "\n  ".join(copies)
+        msg += f"\nRestore with: manage.py restore_db {out} --output restored.sqlite3"
+        self.stdout.write(self.style.SUCCESS(msg))

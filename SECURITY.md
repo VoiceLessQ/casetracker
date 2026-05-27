@@ -77,6 +77,13 @@ while the key is secret.
 - `python manage.py restore_db <file> --output <path>` — decrypts to an explicit
   path; refuses to overwrite without `--force`; fails cleanly on a wrong key.
 - Backups are gitignored (`backups/`, `*.sqlite3.enc`).
+- **Redundancy (3-2-1):** `backup_db --also-copy-to <dir>` (repeatable) drops the
+  encrypted file in extra locations in one run. Point it at a *different volume /
+  mounted offsite share* — a second folder on the **same disk is not real
+  redundancy** (one disk failure or ransomware run takes both). The `.enc` is
+  ciphertext, so copying it to less-trusted/offsite storage is safe. Keep
+  credentialed remote uploads (S3/Azure Blob) in the scheduler/ops layer, not in
+  the app, so backup destinations don't add attack surface.
 
 **Also encrypt the live volume.** `backup_db` protects the backup artifact; run
 the database on an encrypted disk (LUKS / cloud disk encryption) so the working
