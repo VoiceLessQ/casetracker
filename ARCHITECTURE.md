@@ -271,6 +271,23 @@ returned).
 > model. Don't build the full configurable machinery ahead of that need — it's
 > the kind of thing that balloons past what's actually required.
 
+**Cold-watch threshold + deadlines are the department's to set — not ours.**
+`stale()` uses one hardcoded window (60 days) today, but acceptable silence
+varies by case type and department, and some are legally bound (Danish admin has
+*sagsbehandlingsfrister* — statutory processing-time limits). We can't impose our
+own due dates on a department; the system provides the mechanism and a sane
+default, the department (and the law) set the actual days. Two distinct things:
+- **Silence / cold-alert threshold:** flag if untouched for N days —
+  configurable **per department** (and/or per category), falling back to the
+  current 60. Small, contained change: a `cold_after_days` on
+  `Department` / `CaseCategory`; `stale()` reads it instead of the constant.
+- **Processing deadline:** a *due date* the case must be decided by (often
+  statutory, per case type) — distinct from "gone quiet"; surface/escalate as it
+  approaches or passes, rather than only when silent.
+
+Same as statuses: the mechanism is ours, the values are theirs — firm them up
+with real department/legal input, build incrementally.
+
 ## Rules + work guide + auto-attach (the casework engine)
 
 The everyday point of the system: a department's **laws/regulations** and its
