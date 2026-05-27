@@ -18,6 +18,12 @@ addresses, or records). It is shaped like a real system but must only ever hold
 synthetic data, and must never connect to a real identity register or system of
 record.
 
+**Status — early prototype.** The backbone (data model, access control,
+encryption, journaling, audit) is built and smoke-tested, but it still needs
+**broader testing**, and the **UI is rough and being refined** (today it's mostly
+the Django admin plus a basic dashboard). Published to share the direction — not
+production-ready.
+
 See **[SECURITY.md](SECURITY.md)** for the security model + deployment checklist,
 and **[ARCHITECTURE.md](ARCHITECTURE.md)** for where it's headed — a thin
 dashboard/index overlay over the organisation's Microsoft 365 drive and Outlook,
