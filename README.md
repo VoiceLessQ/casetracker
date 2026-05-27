@@ -14,6 +14,13 @@ checklist, and [ARCHITECTURE.md](ARCHITECTURE.md) for where this is headed — a
 thin dashboard/index overlay over the municipality's Microsoft 365 drive and
 Outlook, with identity and roles from Entra.
 
+## License
+
+Licensed under the **Apache License 2.0** — see [LICENSE](LICENSE) and
+[NOTICE](NOTICE). You may use, modify, and redistribute it, but you must retain
+the copyright and attribution notices (the `NOTICE` file). Copyright 2026
+VoiceLessQ.
+
 ## Run it
 
 ```bash
