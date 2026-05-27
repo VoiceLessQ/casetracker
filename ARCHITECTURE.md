@@ -240,6 +240,31 @@ drive ACLs must be updated (IT-owned), and a shielded case needs a fresh grant.
 "Just like that" means context now, content as the permission change follows —
 never a bypass of the access gate.
 
+## Rules + work guide + auto-attach (the casework engine)
+
+The everyday point of the system: a department's **laws/regulations** and its
+**"how we do things" work guide** are wired to the case and **adapt to the
+case's circumstances** — so a worker doesn't have to remember what applies, and
+the gate won't let a case move on with a required item left behind.
+
+- **Regulation map (built).** `RegulationRule` maps a *category* or a
+  *circumstance* → a legal reference, with a level (required/recommended).
+  `Case.applicable_rules()` computes the in-effect rules for the category + the
+  ticked circumstances; required ones are enforced at the handoff/close gate.
+- **Auto-attach on tick (planned).** Ticking a circumstance (e.g. disability)
+  should *materialise* `applicable_rules()` into `CaseLegalRef` rows — the schema
+  already carries `auto` + `rule` for exactly this — and drop the auto ones when
+  it's unticked. Today the rules are *shown*, not *stamped*.
+- **Work guide — "how we do things" (planned).** A new `WorkGuide`, parallel to
+  `RegulationRule`: a **link to a drive document**, triggered by department /
+  category / circumstance. The case surfaces the applicable guides (department
+  base + category + each ticked circumstance), so ticking "disability" changes
+  both the **laws** and the **procedural guidance** shown. Different department →
+  different rules + guide.
+
+This is the municipal-casework core: department-configured rules and procedures
+the system applies *for* the worker, with required items the gate enforces.
+
 ## What exists today vs. the target build
 
 **Built (on `main`, prototype):** department scoping, viewer/member/lead roles,
