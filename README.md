@@ -1,25 +1,47 @@
 # CaseTracker (prototype)
 
-A municipal case-status overlay: it tracks **where a case stands, what's
-waiting, who's on it, and which regulations apply** — and links to documents
-that live on the municipality's own drive. It is an index, not a vault.
+A municipal **case-status overlay** (Greenlandic / Danish context): it tracks
+**where a case stands, what's waiting, who's on it, and which regulations apply**
+— and links to documents that live on the municipality's own drive. It is an
+**index, not a vault** — it stores links and metadata, never the files.
 
-**Placeholder data only.** Never enter a real CPR or real personal details.
-This prototype is shaped like a real system but must only ever hold synthetic
-data. It must never connect to a real CPR register or real records.
+**Placeholder data only.** Never enter a real CPR or real personal details. This
+prototype is shaped like a real system but must only ever hold synthetic data,
+and must never connect to a real CPR register, MitID, or real records.
 
-See [SECURITY.md](SECURITY.md) for the security model (encryption at rest,
-access control, the document access gate, encrypted backups) and a deployment
-checklist, and [ARCHITECTURE.md](ARCHITECTURE.md) for where this is headed — a
-thin dashboard/index overlay over the municipality's Microsoft 365 drive and
-Outlook, with identity and roles from Entra.
+See **[SECURITY.md](SECURITY.md)** for the security model + deployment checklist,
+and **[ARCHITECTURE.md](ARCHITECTURE.md)** for where it's headed — a thin
+dashboard/index overlay over the municipality's Microsoft 365 drive and Outlook,
+with identity and roles from Entra.
 
-## License
+## What it does (built)
 
-Licensed under the **Apache License 2.0** — see [LICENSE](LICENSE) and
-[NOTICE](NOTICE). You may use, modify, and redistribute it, but you must retain
-the copyright and attribution notices (the `NOTICE` file). Copyright 2026
-VoiceLessQ.
+**Access & identity**
+- Department scoping — a worker sees only their department's cases and what hangs
+  off them; the citizen record is the shared spine, the case material is scoped.
+- Roles per department (viewer / member / lead) enforced; provisioning via
+  `setup_roles` + groups; an intake (borgerservice) role for broad citizen search.
+- Person search is **scoped, logged (append-only), shielding-aware**, with a
+  reason-required **break-the-glass** path for out-of-scope lookups.
+
+**Records & workflow**
+- **Worker dashboard** (`/dashboard/`): my cases, my tasks, needs-attention
+  (unexplained-stale), department queue — read-only, scope-aware.
+- **Journaling** — documents carry a direction and get a per-case journal number;
+  immutable once journalized. Per-case journal/activity timeline.
+- **Handoffs** between departments are gated by **department-head approval** plus
+  a completeness check (category, person, required legal refs, required document
+  types).
+- **Append-only trails**: status/department handoffs, narrative logs, document
+  opens, exports, and document add/edit/journalize/remove.
+
+**Data protection**
+- **Field encryption at rest** (CPR + searchable blind index, address, notes) —
+  pluggable (bring-your-own key/provider; Fernet+HKDF is the default base).
+- **PII masked by default** on screen (full CPR only on the scoped detail page).
+- **Document access gate** for shielded persons (explicit, expiring grants).
+- **Export**: gated, logged, AES-256 password-protected, size-capped, watermarked.
+- **Encrypted DB backup/restore** with optional offsite copy.
 
 ## Run it
 
@@ -28,71 +50,77 @@ cd backend
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python manage.py migrate
+python manage.py setup_roles          # create the Caseworker + Borgerservice groups
 python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/admin/ and log in.
+Admin at http://127.0.0.1:8000/admin/.
 
 ### Demo it
 
 ```bash
-python manage.py seed_demo     # synthetic departments, workers, people, cases
+python manage.py seed_demo            # synthetic departments, workers, people, cases
 ```
 
-Then open **http://127.0.0.1:8000/dashboard/** — a worker's worklist (my cases,
-my tasks, needs-attention, department queue). Log in as a seeded worker
+Then open **http://127.0.0.1:8000/dashboard/**. Log in as a seeded worker
 (`anna@demo.gl`, `bo@demo.gl`, `david@demo.gl`, `clara@demo.gl`; password
-`demo12345`) or impersonate them from the admin. The seeded accounts are keyed
-on email with real First/Last names — modelling how production will provision
-from SSO (no invented usernames, no passwords). The point of the demo: the same
-dashboard shows *different* things per worker, and a shielded person disappears
-entirely from search for a worker without a grant — the access model made
-visible, not just described.
+`demo12345`) or impersonate them from the admin. Accounts are keyed on email with
+real names — modelling how production provisions from SSO. The point of the demo:
+the same dashboard shows *different* things per worker, and a shielded person
+disappears entirely from search for a worker without a grant — the access model
+made visible, not just described.
 
-Optional environment:
-- `MUNICIPAL_DRIVE_ROOT` — where document links point (defaults to `backend/drive`).
+## Configuration (environment)
+
+- `MUNICIPAL_DRIVE_ROOT` — where document links point (default `backend/drive`).
 - `SECRET_KEY`, `DEBUG=0`, `ALLOWED_HOSTS` — set before exposing anywhere.
-- `FIELD_ENCRYPTION_KEY` — encrypts sensitive fields at rest (CPR, notes,
-  address). Set from a secret manager; losing it makes those fields
-  unrecoverable. `BACKUP_ENCRYPTION_KEY` — optional, for `manage.py backup_db`.
+- `FIELD_ENCRYPTION_KEY` (or `FIELD_ENCRYPTION_KEY_FILE`) — at-rest field
+  encryption; losing it makes those fields unrecoverable. `BACKUP_ENCRYPTION_KEY`
+  (or `_FILE`) and `FIELD_ENCRYPTION_BACKEND` (bring-your-own crypto) — see
+  SECURITY.md.
+- `EXPORT_MAX_DOCUMENTS` (export cap), `JOURNAL_NUMBER_FORMAT` (journal numbering).
 
 ## Apps
 
-- `org` — departments and who belongs to them (the scoping unit).
-- `people` — citizens, family tree (temporal), CPR/name lookup, per-person
-  flat folders keyed on a permanent id, running notes.
-- `cases` — cases, status history, document links, follow-ups, narrative logs,
-  assignments, calendar, legal references, and the category/circumstance →
-  regulation map.
+- `org` — departments and memberships (the scoping unit + per-department roles).
+- `people` — citizens, temporal family tree, dash-tolerant CPR/name lookup,
+  shielding + access grants, append-only notes, search logging.
+- `cases` — cases, status history, document links + journaling, follow-ups,
+  narrative logs, assignments, calendar, legal references, the
+  category/circumstance → regulation map, handoff approval, document types, and
+  the append-only audit-event models.
 - `testing` — the impersonation tool below.
 
-## Testing what a worker can see and do (impersonation)
+## Impersonation (test what a worker sees)
 
-The point of the scoping is that a caseworker only sees their department's
-cases. To test that as a superuser:
+The point of the scoping is that a caseworker sees only their department's
+material. As a superuser:
 
-1. Create a worker user: admin → Users → Add. Set **is_staff = True** (required
-   to open the admin) and give them limited permissions if you want to test
-   "can do" too.
-2. Give them a department: admin → Memberships → Add (user + department).
-3. admin → Users → tick the worker → action **"Impersonate for testing
-   (view as this user)"**.
-4. You now see the admin exactly as they do — department-scoped cases,
-   append-only logs, owner-only calendar, the lot.
-5. Return to yourself: visit **`/stop-impersonation/`**.
+1. Provision a worker: admin → Users → Add; tick **is_staff**, add the
+   **Caseworker** group, and set their department(s)/role via the membership
+   inline. (Or just use the `seed_demo` workers.)
+2. admin → Users → tick the worker → action **"Impersonate for testing"**.
+3. You now see the admin (and `/dashboard/`) exactly as they do.
+4. Return to yourself: visit **`/stop-impersonation/`**.
 
-Notes:
-- Only a superuser can start impersonation.
-- A non-staff worker can't open the admin, so impersonating them shows nothing
-  — set is_staff to test. You can always get back via `/stop-impersonation/`.
-- This is a **testing tool**. Real impersonation is a high-trust, heavily
-  audited capability; restrict and log it far more tightly before any real use.
+This is a **testing tool**. Real impersonation is a high-trust, audited
+capability; restrict and log it far more tightly before any real use.
 
-## Not built yet (runtime, on top of this schema)
+## Not built yet
 
-- Stale-case dashboard view (the query `Case.objects.stale()` exists).
-- Materializing circumstance rules into `CaseLegalRef` rows on tick
-  (`Case.applicable_rules()` computes them).
-- Select + zip export of a person's document links (high-sensitivity; log it).
-- Enforcing `PersonNote.visibility` and required-legal-ref on close.
+- **Microsoft 365 / Graph track**: SSO/Entra federation + MFA, multi-tenant,
+  SharePoint/OneDrive document storage, mail capture, Outlook calendar.
+- **Native dashboard actions** (accept case / add follow-up) — today they link
+  into the admin.
+- **Detection/alerting** (large exports, searches with no follow-up),
+  retention/purge, tamper-evident audit shipped to an external/SIEM store.
+- Tests, a non-admin frontend, and real drive integration.
+
+See ARCHITECTURE.md for the target and SECURITY.md's "deferred hardening" list.
+
+## License
+
+Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). You may use, modify,
+and redistribute it, but must retain the copyright and attribution notices.
+Copyright 2026 VoiceLessQ.
