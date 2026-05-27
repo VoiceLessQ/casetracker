@@ -63,6 +63,15 @@ there's no separate credential for IT to forget, which is the single most common
 real-world leak (the ex-employee who kept access). You also inherit the org's
 MFA, password policy, and conditional access for free.
 
+**Provisioning on first login — keyed on email, named from claims.** The stable
+unique account key is the **email/UPN** (`anna@qeqertalik.gl`), never the name:
+names collide (two Anna Hansens) and change (marriage/legal), so keying on a name
+re-introduces exactly the random/collision problem to avoid. First/Last and
+display name are read from the Entra claims (`givenName`, `surname`,
+`displayName`) and a local record is auto-created on first login — nothing typed,
+nothing invented. (The seed demo models this: accounts keyed on email with real
+First/Last names.)
+
 **Keep authentication and authorization separate** ("create users" blends them):
 - **Authentication** (who they are) → their org account via SSO. No passwords here.
 - **Authorization** (department + role) → still ours, two options: (a) **Entra

@@ -21,6 +21,7 @@ from people.models import Person
 from cases.models import Case, CaseAssignment, FollowUp, CaseCategory
 
 DEMO_PASSWORD = "demo12345"   # synthetic demo only
+DEMO_DOMAIN = "demo.gl"       # stand-in for a municipal Entra domain (synthetic)
 
 
 class Command(BaseCommand):
@@ -37,9 +38,16 @@ class Command(BaseCommand):
         teknik = Department.objects.get_or_create(code="teknik", defaults={"name": "Teknik & Miljø"})[0]
         borger = Department.objects.get_or_create(code="borger", defaults={"name": "Borgerservice"})[0]
 
-        def worker(username, full, dept, role, extra_group=None):
-            u, _ = User.objects.get_or_create(username=username, defaults={"first_name": full})
-            u.first_name = full
+        # Modelled like federated accounts: the EMAIL is the stable account key
+        # (what SSO would key on), First/Last is the display (what Entra claims
+        # would provide on first login). No invented usernames, no passwords in
+        # production — the password here is only so the demo is loggable.
+        def worker(local, first, last, dept, role, extra_group=None):
+            email = f"{local}@{DEMO_DOMAIN}"
+            u, _ = User.objects.get_or_create(username=email, defaults={})
+            u.email = email
+            u.first_name = first
+            u.last_name = last
             u.is_staff = True
             u.is_superuser = False
             u.set_password(DEMO_PASSWORD)
@@ -50,10 +58,10 @@ class Command(BaseCommand):
             Membership.objects.update_or_create(user=u, department=dept, defaults={"role": role})
             return u
 
-        anna = worker("anna", "Anna (social member)", social, Membership.Role.MEMBER)
-        bo = worker("bo", "Bo (social lead)", social, Membership.Role.LEAD)
-        david = worker("david", "David (teknik member)", teknik, Membership.Role.MEMBER)
-        clara = worker("clara", "Clara (borgerservice intake)", borger, Membership.Role.MEMBER, intake)
+        anna = worker("anna", "Anna", "Hansen", social, Membership.Role.MEMBER)
+        bo = worker("bo", "Bo", "Lund", social, Membership.Role.LEAD)
+        david = worker("david", "David", "Berthelsen", teknik, Membership.Role.MEMBER)
+        clara = worker("clara", "Clara", "Olsen", borger, Membership.Role.MEMBER, intake)
 
         # People (synthetic). One is shielded.
         def person(name, cpr, address, shielded=False):
@@ -108,9 +116,10 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             "Seeded demo data.\n"
-            f"  Login password for all demo workers: {DEMO_PASSWORD}\n"
-            "  Workers: anna (social/member), bo (social/lead), david (teknik/member), "
-            "clara (borgerservice/intake).\n"
+            f"  Accounts are keyed on email (as SSO would be); password {DEMO_PASSWORD} "
+            "(demo only — production federates, no passwords).\n"
+            f"  Workers: anna@{DEMO_DOMAIN} (social/member), bo@{DEMO_DOMAIN} (social/lead), "
+            f"david@{DEMO_DOMAIN} (teknik/member), clara@{DEMO_DOMAIN} (borgerservice/intake).\n"
             "  Open /dashboard/ as each — Anna sees only Social cases, not TEK-201; "
             "SOC-105 shows under 'Needs attention'.\n"
             "  Search /admin/people/person/?q=Sara as anna: the shielded person does NOT "
