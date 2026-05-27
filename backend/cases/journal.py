@@ -62,4 +62,6 @@ def journalize(document, user):
         document.save(
             update_fields=["journal_sequence", "journal_number", "journalized_at", "journalized_by"]
         )
+        from .activity import log_document_activity
+        log_document_activity(user, document, "journalized", detail=document.journal_number)
     return document.journal_number

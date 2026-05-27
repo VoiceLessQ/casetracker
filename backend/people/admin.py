@@ -125,14 +125,26 @@ class PersonAdmin(admin.ModelAdmin):
         })
 
     def save_formset(self, request, form, formset, change):
-        # Stamp granted_by on new access grants created via the inline.
+        # Stamp granted_by on new access grants, and log document add/edit so a
+        # document attached via the person page leaves the same trail.
+        from cases.activity import log_document_activity
+        from cases.models import Document, DocumentActivity
+
         instances = formset.save(commit=False)
         for obj in instances:
+            is_new = obj.pk is None
             if isinstance(obj, PersonAccessGrant) and not obj.granted_by_id:
                 obj.granted_by = request.user
             obj.save()
+            if isinstance(obj, Document):
+                log_document_activity(
+                    request.user, obj,
+                    DocumentActivity.Action.ADDED if is_new else DocumentActivity.Action.EDITED,
+                )
         formset.save_m2m()
         for obj in formset.deleted_objects:
+            if isinstance(obj, Document):
+                log_document_activity(request.user, obj, DocumentActivity.Action.REMOVED)
             obj.delete()
 
 

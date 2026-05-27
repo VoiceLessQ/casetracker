@@ -627,3 +627,39 @@ class DocumentType(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class DocumentActivity(models.Model):
+    """Append-only trail of what happens to a document — added, edited,
+    journalized, removed — captured with the acting user. So nothing enters or
+    changes silently, and the record survives even if a draft is later deleted
+    (the document FK goes null, the label snapshot stays)."""
+
+    class Action(models.TextChoices):
+        ADDED = "added", "Added"
+        EDITED = "edited", "Edited"
+        JOURNALIZED = "journalized", "Journalized"
+        REMOVED = "removed", "Removed"
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="document_activities",
+    )
+    action = models.CharField(max_length=12, choices=Action.choices)
+    document = models.ForeignKey(
+        Document, on_delete=models.SET_NULL, null=True, blank=True, related_name="activities",
+    )
+    document_label = models.CharField(max_length=120)          # snapshot
+    case = models.ForeignKey(
+        Case, on_delete=models.SET_NULL, null=True, blank=True, related_name="document_activities",
+    )
+    person = models.ForeignKey(
+        "people.Person", on_delete=models.SET_NULL, null=True, blank=True, related_name="document_activities",
+    )
+    detail = models.CharField(max_length=255, blank=True)      # e.g. journal number / what changed
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.created_at:%Y-%m-%d %H:%M} {self.actor} {self.action} {self.document_label}"

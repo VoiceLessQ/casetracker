@@ -16,6 +16,7 @@ from org.models import Department, Membership
 from people.access import can_open_person_documents
 from people.admin import CprSearchMixin
 
+from .activity import log_document_activity
 from .exports import build_encrypted_zip, generate_password, safe_drive_path
 from .handoff import HandoffError, approve_handoff, reject_handoff, handoff_blockers
 from .journal import JournalError, journalize
@@ -24,7 +25,7 @@ from .models import (
     CaseLog, CaseAssignment, CalendarEvent,
     LegalReference, CaseLegalRef,
     CaseCategory, RegulationRule, Circumstance, ExportEvent, DocumentAccessEvent,
-    CaseHandoff, DocumentType,
+    CaseHandoff, DocumentType, DocumentActivity,
 )
 
 
@@ -361,6 +362,11 @@ class CaseAdmin(CprSearchMixin, ScopedAdmin):
             rows.append((log.created_at, format_html(
                 "{}: {} <em>({})</em>", log.get_kind_display(), log.text, log.author,
             )))
+        for a in obj.document_activities.all():
+            rows.append((a.created_at, format_html(
+                "document {}: {} {} <em>({})</em>",
+                a.action, a.document_label, f"· {a.detail}" if a.detail else "", a.actor,
+            )))
         if not rows:
             return "No journalized documents or log entries yet."
         rows.sort(key=lambda r: r[0])
@@ -464,6 +470,22 @@ class DocumentAdmin(CprSearchMixin, ScopedAdmin):
         return qs.filter(
             Q(case__owner_department_id__in=depts) | Q(case__isnull=True)
         )
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        # Nothing enters or changes silently: every add/edit hits the trail.
+        log_document_activity(
+            request.user, obj, DocumentActivity.Action.EDITED if change else DocumentActivity.Action.ADDED
+        )
+
+    def delete_model(self, request, obj):
+        log_document_activity(request.user, obj, DocumentActivity.Action.REMOVED)
+        super().delete_model(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        for obj in queryset:
+            log_document_activity(request.user, obj, DocumentActivity.Action.REMOVED)
+        super().delete_queryset(request, queryset)
 
 
 @admin.register(FollowUp)
@@ -599,6 +621,32 @@ class DocumentAccessEventAdmin(admin.ModelAdmin):
         if request.user.is_superuser:
             return qs
         return qs.filter(opened_by=request.user)
+
+
+@admin.register(DocumentActivity)
+class DocumentActivityAdmin(admin.ModelAdmin):
+    """Append-only trail of document add/edit/journalize/remove. Created by the
+    document flows; never editable or deletable. Superusers see all; others see
+    their own."""
+    list_display = ("created_at", "actor", "action", "document_label", "case", "person", "detail")
+    list_filter = ("action", "created_at")
+    search_fields = ("document_label", "detail", "actor__username", "case__ref")
+    readonly_fields = ("actor", "action", "document", "document_label", "case", "person", "detail", "created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return obj is None
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(actor=request.user)
 
 
 @admin.register(CalendarEvent)

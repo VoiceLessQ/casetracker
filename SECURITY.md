@@ -200,6 +200,9 @@ Append-only, never editable in admin:
 - `StatusEvent` — status/department handoffs.
 - `ExportEvent` — every export.
 - `DocumentAccessEvent` — every document open and blocked attempt.
+- `DocumentActivity` — every document add / edit / journalize / remove, with the
+  acting user. Snapshots the label, so the trail survives even if a draft is
+  deleted — nothing enters or changes silently. Surfaced in the case journal.
 
 Records (journaling): a `Document` journalized onto a case gets a unique journal
 number + date (`journalize`, format via `JOURNAL_NUMBER_FORMAT`). It is then
