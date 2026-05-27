@@ -320,7 +320,30 @@ class CaseAdmin(CprSearchMixin, ScopedAdmin):
     autocomplete_fields = ("person", "category")
     filter_horizontal = ("circumstances",)   # user-friendly dual-list selector
     inlines = [CaseAssignmentInline, FollowUpInline, CaseLegalRefInline]
-    readonly_fields = ("outstanding", "journal")
+    readonly_fields = ("activity", "outstanding", "journal")
+
+    @admin.display(description="Activity")
+    def activity(self, obj):
+        """Last-updated cue so a worker sees a case drifting toward cold before
+        it actually is. 'Cold' uses the canonical stale() rule; quiet-on-purpose
+        (waiting / muted / explained quiet window) is shown so it isn't mistaken
+        for neglect."""
+        if obj is None or obj.pk is None:
+            return "—"
+        last = timezone.localdate(obj.updated_at)
+        days = (timezone.localdate() - last).days
+        base = format_html("Last updated {} ({} days ago)", last, days)
+        if Case.objects.stale().filter(pk=obj.pk).exists():
+            return format_html('{} — <strong style="color:#ba2121;">COLD — unexplained silence</strong>', base)
+        quiet_on_purpose = (
+            obj.mute_pings or obj.status == Case.Status.WAITING or bool(obj.quiet_reason)
+            or (obj.review_after and obj.review_after >= timezone.localdate())
+        )
+        if quiet_on_purpose:
+            return format_html("{} — quiet on purpose", base)
+        if days >= 30:   # past half the 60-day cold window, and nobody has explained it
+            return format_html('{} — <span style="color:#a06000;">approaching cold</span>', base)
+        return base
 
     @admin.display(description="Outstanding before handoff / close")
     def outstanding(self, obj):
