@@ -21,7 +21,7 @@ from people.models import Person
 from cases.models import Case, CaseAssignment, FollowUp, CaseCategory
 
 DEMO_PASSWORD = "demo12345"   # synthetic demo only
-DEMO_DOMAIN = "demo.gl"       # stand-in for a municipal Entra domain (synthetic)
+DEMO_DOMAIN = "demo"          # stand-in for an org's Entra domain (synthetic)
 
 
 class Command(BaseCommand):

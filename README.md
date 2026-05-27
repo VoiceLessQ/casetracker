@@ -1,26 +1,32 @@
 # CaseTracker (prototype)
 
-A municipal **case-status overlay** (Greenlandic / Danish context): it tracks
-**where a case stands, what's waiting, who's on it, and which regulations apply**
-— and links to documents that live on the municipality's own drive. It is an
-**index, not a vault** — it stores links and metadata, never the files.
+A secure overlay for tracking **cases and the documents tied to them** — where a
+case stands, who's working it, what's outstanding, and which rules apply. Built
+around **strict access control, shielding of sensitive records, and a complete
+audit trail**. It is an **index, not a vault**: it links to documents on an
+existing drive rather than storing them.
 
-**Placeholder data only.** Never enter a real CPR or real personal details. This
-prototype is shaped like a real system but must only ever hold synthetic data,
-and must never connect to a real CPR register, MitID, or real records.
+Suited to **regulated, document-heavy casework** — anywhere who-can-see-what and
+a defensible record matter (public administration, legal, social services,
+healthcare, HR, compliance).
+
+**Placeholder data only.** Never enter real personal data (real IDs, names,
+addresses, or records). It is shaped like a real system but must only ever hold
+synthetic data, and must never connect to a real identity register or system of
+record.
 
 See **[SECURITY.md](SECURITY.md)** for the security model + deployment checklist,
 and **[ARCHITECTURE.md](ARCHITECTURE.md)** for where it's headed — a thin
-dashboard/index overlay over the municipality's Microsoft 365 drive and Outlook,
+dashboard/index overlay over the organisation's Microsoft 365 drive and Outlook,
 with identity and roles from Entra.
 
 ## What it does (built)
 
 **Access & identity**
 - Department scoping — a worker sees only their department's cases and what hangs
-  off them; the citizen record is the shared spine, the case material is scoped.
+  off them; the person record is the shared spine, the case material is scoped.
 - Roles per department (viewer / member / lead) enforced; provisioning via
-  `setup_roles` + groups; an intake (borgerservice) role for broad citizen search.
+  `setup_roles` + groups; an intake role for broad person search.
 - Person search is **scoped, logged (append-only), shielding-aware**, with a
   reason-required **break-the-glass** path for out-of-scope lookups.
 
@@ -64,9 +70,9 @@ python manage.py seed_demo            # synthetic departments, workers, people, 
 ```
 
 Then open **http://127.0.0.1:8000/dashboard/**. Log in as a seeded worker
-(`anna@demo.gl`, `bo@demo.gl`, `david@demo.gl`, `clara@demo.gl`; password
-`demo12345`) or impersonate them from the admin. Accounts are keyed on email with
-real names — modelling how production provisions from SSO. The point of the demo:
+(`anna@demo`, `bo@demo`, `david@demo`, `clara@demo`; password `demo12345`) or
+impersonate them from the admin. Accounts are keyed on email with real names —
+modelling how production provisions from SSO. The point of the demo:
 the same dashboard shows *different* things per worker, and a shielded person
 disappears entirely from search for a worker without a grant — the access model
 made visible, not just described.
@@ -84,8 +90,8 @@ made visible, not just described.
 ## Apps
 
 - `org` — departments and memberships (the scoping unit + per-department roles).
-- `people` — citizens, temporal family tree, dash-tolerant CPR/name lookup,
-  shielding + access grants, append-only notes, search logging.
+- `people` — the people on cases, temporal family tree, dash-tolerant ID/name
+  lookup, shielding + access grants, append-only notes, search logging.
 - `cases` — cases, status history, document links + journaling, follow-ups,
   narrative logs, assignments, calendar, legal references, the
   category/circumstance → regulation map, handoff approval, document types, and
