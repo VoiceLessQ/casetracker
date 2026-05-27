@@ -8,9 +8,10 @@ around **strict access control, shielding of sensitive records, and a full audit
 trail**. It is an **index, not a vault**: it links to documents on an existing
 drive rather than storing them.
 
-Suited to **regulated, document-heavy casework** — anywhere who-can-see-what and
-a defensible record matter (public administration, legal, social services,
-healthcare, HR, compliance).
+Suited to **small municipalities — and similar small, document-heavy
+organisations** — where who-can-see-what and a defensible record matter, but a
+full enterprise records system is overkill. The point is to close the gap so
+cases don't slip or go cold.
 
 **Placeholder data only.** Never enter real personal data (real IDs, names,
 addresses, or records). It is shaped like a real system but must only ever hold
