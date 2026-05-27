@@ -23,6 +23,23 @@ and **[ARCHITECTURE.md](ARCHITECTURE.md)** for where it's headed — a thin
 dashboard/index overlay over the organisation's Microsoft 365 drive and Outlook,
 with identity and roles from Entra.
 
+## How it fits together
+
+A person is the shared spine; everything hangs off their cases — and the
+**cold-watch** is where a case gets caught before it slips:
+
+```mermaid
+graph TD
+    P["Person — the shared spine across departments"]
+    P --> C["Case — owned by one department at a time"]
+    C --> DOC["Documents — links to the drive, not files"]
+    C --> JNL["Journal — numbered, immutable records"]
+    C --> REG["Regulations — applied by category / circumstance"]
+    C --> HO["Handoff — gated: department-head approval + completeness"]
+    C --> CW["Cold-watch — flags unexplained silence"]
+    CW --> DASH["Dashboard: Needs attention — where the gap closes"]
+```
+
 ## What it does (built)
 
 **Access & identity**
