@@ -250,14 +250,26 @@ likely a `Person`-level deceased fact that closes their cases), kept apart from
 the everyday reversible `done`. (Built: auto-reopen on handoff. Planned: the
 distinct terminal closure.)
 
-**Status vocabulary is a starting set, to firm up with real departments.** The
-current statuses (new / in_progress / waiting / blocked / done) are a controlled
-*starting* vocabulary; real departments will want more or different ones —
-candidates raised so far: **"not started"**, **"returned — missing required
-items"** (ties to `handoff_blockers` / a rejected handoff), and others surfaced
-in testing. Decide later whether statuses stay code-defined `choices` (simple)
-or become admin-configurable (flexible, more machinery) — firm up the actual set
-through use before making it configurable.
+**Status vocabulary: configurable labels over fixed behavioural kinds (when
+needed).** Departments can't share one status list, so the eventual direction is
+**admin-configurable, per-department statuses with seeded defaults**. The catch:
+the code reasons about what a status *means*, not its label — `stale()` skips
+WAITING, DONE leaves the worklist and auto-reopens on handoff, the queue excludes
+DONE. So the design splits the two: each status carries a **kind** from a small
+fixed set the code understands (`open / waiting / blocked / done / returned`),
+while the **name** is the department's own. Sketch:
+`CaseStatus(name, kind, department=null→global, active, order)`; `Case.status`
+becomes an FK; logic keys off `status.kind`, the UI shows `status.name`. Seed the
+current five plus candidates ("not started" → open, "returned — missing items" →
+returned).
+
+> **Build deferred, and deliberately incremental.** The part that needs real
+> input is the *kinds* (the contract the code depends on), not the labels —
+> getting kinds wrong means rework. Guiding principle: prefer the smallest change
+> that can scale over a big speculative engine. So today's code-defined `choices`
+> stays until a real department's states are seen; then migrate enum → label+kind
+> model. Don't build the full configurable machinery ahead of that need — it's
+> the kind of thing that balloons past what's actually required.
 
 ## Rules + work guide + auto-attach (the casework engine)
 
