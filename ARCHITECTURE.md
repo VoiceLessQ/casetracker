@@ -180,6 +180,29 @@ does not unify what it does not own. Mixing the two modes silently — a dashboa
 in one department, an unaudited system of record in another — is the risk to
 avoid.
 
+## Journal/case numbering is switchable, never hardcoded
+
+Numbering schemes differ per municipality and per ESDH (e.g. `26/00112` =
+`YY/NNNNN`, a yearly-reset running case number; documents append an act number
+→ `26/00112-001`). So the scheme is the deployment's to set, not ours to fix.
+
+- **Journal/act number format** is already configurable today via
+  `JOURNAL_NUMBER_FORMAT` (`{ref}`, `{seq}` placeholders) — no code change.
+- **Case-number generation** should become a small **numbering-strategy**
+  setting (a mode, not just a format), with four positions:
+  - `manual` — typed in (today's behaviour);
+  - `yearly` — auto `YY/NNNNN`, reset each year, assigned under a row lock;
+  - `per-case-seq` — the current `{ref}-{seq}` style;
+  - `defer` — **do not generate; the ESDH owns the number** and the overlay
+    mirrors it. This position is mandatory, not optional: where GetOrganized (or
+    another ESDH) owns the record, the official number is theirs.
+- When multi-tenant lands, this setting is **per municipality (and possibly per
+  department)**, since two municipalities won't share a scheme.
+
+Build deferred: the format setting already provides real switchability; the
+strategy engine earns its keep once a real target's scheme is confirmed, or a
+no-ESDH department actually needs auto-numbers — not before.
+
 ## Case lifecycle, handoff, and continuity
 
 A case is **open** (new / in_progress / waiting / blocked) until **closed**
