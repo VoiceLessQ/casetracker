@@ -1,3 +1,6 @@
+# CaseTracker — municipal case-status overlay
+# Copyright 2026 VoiceLessQ — https://github.com/VoiceLessQ
+# Licensed under the Apache License 2.0; see LICENSE and NOTICE.
 """Case handoff — a gated move of a case to another department.
 
 Moving a case is not free: the receiving department must not inherit an

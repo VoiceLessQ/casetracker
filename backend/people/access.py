@@ -1,3 +1,6 @@
+# CaseTracker — municipal case-status overlay
+# Copyright 2026 VoiceLessQ — https://github.com/VoiceLessQ
+# Licensed under the Apache License 2.0; see LICENSE and NOTICE.
 """The explicit access checkpoint for OPENING a person's documents.
 
 Guardrail #3: navigation is not access. Reaching a person via search or the

@@ -1,3 +1,6 @@
+# CaseTracker — municipal case-status overlay
+# Copyright 2026 VoiceLessQ — https://github.com/VoiceLessQ
+# Licensed under the Apache License 2.0; see LICENSE and NOTICE.
 """Decrypt an encrypted backup (from backup_db) to a SQLite file.
 
 Restore is deliberate and destructive, so it never overwrites an existing file

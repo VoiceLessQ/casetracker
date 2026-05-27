@@ -1,3 +1,6 @@
+# CaseTracker — municipal case-status overlay
+# Copyright 2026 VoiceLessQ — https://github.com/VoiceLessQ
+# Licensed under the Apache License 2.0; see LICENSE and NOTICE.
 """Seed a small, synthetic demo designed to SHOW the access model, not just
 fill the dashboard. After running, log in (or impersonate) as different workers
 and watch the same system show different things — and watch the shielded person

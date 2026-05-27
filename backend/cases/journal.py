@@ -1,3 +1,6 @@
+# CaseTracker — municipal case-status overlay
+# Copyright 2026 VoiceLessQ — https://github.com/VoiceLessQ
+# Licensed under the Apache License 2.0; see LICENSE and NOTICE.
 """Journalizing — registering a document as a formal record on a case.
 
 Records-management concepts (ISO 15489-ish, kept generic so this isn't tied to

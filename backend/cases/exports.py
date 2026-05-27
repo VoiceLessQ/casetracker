@@ -1,3 +1,6 @@
+# CaseTracker — municipal case-status overlay
+# Copyright 2026 VoiceLessQ — https://github.com/VoiceLessQ
+# Licensed under the Apache License 2.0; see LICENSE and NOTICE.
 """Encrypted document export — the deliberate, controlled leak.
 
 The system is an index, not a vault: it stores links, not files. An export

@@ -1,3 +1,6 @@
+# CaseTracker — municipal case-status overlay
+# Copyright 2026 VoiceLessQ — https://github.com/VoiceLessQ
+# Licensed under the Apache License 2.0; see LICENSE and NOTICE.
 """At-rest field encryption + blind index for searchable encrypted fields.
 
 The point: a stolen database (or backup) shows only ciphertext for encrypted
