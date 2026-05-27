@@ -240,6 +240,25 @@ drive ACLs must be updated (IT-owned), and a shielded case needs a fresh grant.
 "Just like that" means context now, content as the permission change follows —
 never a bypass of the access gate.
 
+**"Done" is per-department, not a permanent close.** Marking a case `done` means
+"done *for this department, for now*", not finished forever. So when a `done`
+case is handed off, it **auto-reopens** (`done → in_progress`) for the receiving
+department — the `StatusEvent` trail keeps the "done in Social, reopened in Tax"
+history. The only truly terminal state is the person being gone: a real closure
+("deceased / permanently closed") should be a **distinct, final status** (and
+likely a `Person`-level deceased fact that closes their cases), kept apart from
+the everyday reversible `done`. (Built: auto-reopen on handoff. Planned: the
+distinct terminal closure.)
+
+**Status vocabulary is a starting set, to firm up with real departments.** The
+current statuses (new / in_progress / waiting / blocked / done) are a controlled
+*starting* vocabulary; real departments will want more or different ones —
+candidates raised so far: **"not started"**, **"returned — missing required
+items"** (ties to `handoff_blockers` / a rejected handoff), and others surfaced
+in testing. Decide later whether statuses stay code-defined `choices` (simple)
+or become admin-configurable (flexible, more machinery) — firm up the actual set
+through use before making it configurable.
+
 ## Rules + work guide + auto-attach (the casework engine)
 
 The everyday point of the system: a department's **laws/regulations** and its

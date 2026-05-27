@@ -73,7 +73,7 @@ def approve_handoff(handoff, approver, note=""):
     """Approve and perform the move. Requires the approver to be a head of the
     holding department and the case to be complete. Moves owner_department and
     records a StatusEvent, atomically."""
-    from .models import CaseHandoff, StatusEvent
+    from .models import Case, CaseHandoff, StatusEvent
 
     if handoff.status != CaseHandoff.Status.PENDING:
         raise HandoffError("This handoff has already been decided.")
@@ -88,11 +88,17 @@ def approve_handoff(handoff, approver, note=""):
 
     with transaction.atomic():
         old_department = case.owner_department
+        old_status = case.status
         case.owner_department = handoff.to_department
-        case.save(update_fields=["owner_department"])
+        # "Done" is per-department, not a permanent close: a case completed in one
+        # department re-opens for the receiving one (unmark), so it's tracked as
+        # done-for-now in the prior department via the StatusEvent trail.
+        if case.status == Case.Status.DONE:
+            case.status = Case.Status.IN_PROGRESS
+        case.save(update_fields=["owner_department", "status"])
         StatusEvent.objects.create(
             case=case, actor=approver,
-            from_status=case.status, to_status=case.status,
+            from_status=old_status, to_status=case.status,
             from_department=old_department, to_department=handoff.to_department,
             note=f"Handoff approved: {handoff.note}"[:500],
         )
