@@ -51,15 +51,39 @@ decides how much PII the database holds at all.
 
 ## Identity & authorization
 
-**Identity comes from Microsoft (Entra ID / Azure AD).** Workers sign in with
-their existing municipal account (SSO); this system does not create or store
-passwords.
+**Identity is federated, not invited.** Workers sign in with their existing
+municipal account (e.g. `n@qeqertalik.gl`) via SSO against Entra (Azure AD).
+This system **never creates an account or stores a password** — "invite
+n@qeqertalik.gl" means "trust their org's login," not "make a CaseTracker
+credential."
 
-**Roles come from Entra groups.** An AD group (e.g. `Social-Caseworkers`,
-`Social-Leads`) maps to a department + role in this system. IT manages group
-membership in one place; this system maps groups to scope/role. This replaces
-the manual user + `Membership` provisioning the prototype uses today — same role
-shape, different source.
+Why this is a data-protection move, not just convenience: when IT disables a
+leaver's `qeqertalik.gl` account, CaseTracker access dies with it automatically —
+there's no separate credential for IT to forget, which is the single most common
+real-world leak (the ex-employee who kept access). You also inherit the org's
+MFA, password policy, and conditional access for free.
+
+**Keep authentication and authorization separate** ("create users" blends them):
+- **Authentication** (who they are) → their org account via SSO. No passwords here.
+- **Authorization** (department + role) → still ours, two options: (a) **Entra
+  groups** — IT puts the person in `Social-Caseworkers`, the app maps the group
+  to a department/role and auto-creates a local record on first login (no
+  per-user invite; group membership drives it); or (b) SSO authenticates and an
+  admin assigns department/role in-app. Either way, no stored passwords. This
+  replaces the manual user + `Membership` provisioning the prototype uses today.
+
+**The email domain identifies the municipality → design for multi-tenant.** If
+this ever serves more than one municipality (`qeqertalik.gl`, `sermersooq.gl`,
+…), each is a separate Entra tenant that trusts the app, and the domain maps to
+*which* municipality a user belongs to. That domain→tenant mapping is the
+top-level scope *above* department scoping (a Social-Caseworker in Qeqertalik ≠
+one in Sermersooq). Decide single- vs multi-tenant up front, since it shapes the
+Entra app registration and every scope check.
+
+**Do NOT build an interim email-invite-with-passwords system as a stopgap.** It's
+throwaway effort and re-introduces the exact password surface federation removes.
+The prototype demo runs on seeded users via impersonation (no real auth needed);
+SSO is baked in with the Graph integration, not before.
 
 **See / not see — by department. Can do — by role.**
 - **See:** you see your department's cases and everything hanging off them
