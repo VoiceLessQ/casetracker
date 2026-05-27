@@ -1,10 +1,12 @@
 # CaseTracker (prototype)
 
 A secure overlay for tracking **cases and the documents tied to them** — where a
-case stands, who's working it, what's outstanding, and which rules apply. Built
-around **strict access control, shielding of sensitive records, and a complete
-audit trail**. It is an **index, not a vault**: it links to documents on an
-existing drive rather than storing them.
+case stands, who's working it, and what's outstanding. Its job is to **keep
+things from slipping**: it surfaces cases that have gone unexplainedly quiet
+("cold") and keeps a clear, append-only record of who did what, when. Built
+around **strict access control, shielding of sensitive records, and a full audit
+trail**. It is an **index, not a vault**: it links to documents on an existing
+drive rather than storing them.
 
 Suited to **regulated, document-heavy casework** — anywhere who-can-see-what and
 a defensible record matter (public administration, legal, social services,
@@ -87,7 +89,13 @@ made visible, not just described.
   SECURITY.md.
 - `EXPORT_MAX_DOCUMENTS` (export cap), `JOURNAL_NUMBER_FORMAT` (journal numbering).
 
-## Apps
+## Languages
+
+Honest status: i18n is **plumbed, not finished**. Danish (default) and English
+are configured and `USE_I18N` is on, so Django's admin chrome shows in Danish —
+but our own labels and screens aren't translated yet, and there's no language
+switcher. A real switchable Danish/English UI still needs string-wrapping,
+translation files (ideally a human translator), and a per-user language choice.
 
 - `org` — departments and memberships (the scoping unit + per-department roles).
 - `people` — the people on cases, temporal family tree, dash-tolerant ID/name
