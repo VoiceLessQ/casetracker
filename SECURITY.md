@@ -69,6 +69,23 @@ it *true*.
 > you, and the blind index (low-entropy CPR) is brute-forceable the instant the
 > key leaks.
 
+## Security is only as good as the people — including whoever built it
+
+Every control in this document shapes behaviour and records it; none of it makes
+a person careful. The real failures in systems like this are human, not
+cryptographic: a shared login, the key left on the same box, a laptop left
+unlocked, a careless export, an account that should have been disabled months
+ago. The technical layer can make the right thing easy and the wrong thing
+logged — it cannot make the right thing happen.
+
+That includes the author and the operator. Being the person who built it is not
+an exemption — not for VoiceLessQ, not for anyone. A maintainer holding the keys
+is as much a potential point of failure as any caseworker, and should be held to
+the same scope, logging, and least-privilege as everyone else — ideally so the
+system does not *let* any single person, author included, quietly become the
+weak point. Security here is a discipline everyone who touches it keeps up, not
+a feature that is ever "done".
+
 ## 1. Encryption at rest
 
 Sensitive fields are encrypted in the database with authenticated encryption
