@@ -87,9 +87,18 @@ class Person(models.Model):
         self._sync_cpr_bidx()   # authoritative: keep the index in step with the CPR
         super().save(*args, **kwargs)
 
+    @property
+    def masked_cpr(self):
+        """CPR with all but the last 4 digits masked — for lists, worklists, and
+        anywhere a person is referenced. The full value lives only on the
+        (scoped, logged) detail page, to cut casual harvesting and screenshots."""
+        if not self.cpr:
+            return "no CPR"
+        digits = "".join(ch for ch in self.cpr if ch.isdigit())
+        return f"••••••-{digits[-4:]}" if len(digits) >= 4 else "••••••"
+
     def __str__(self):
-        label = self.cpr or f"no CPR · {self.uid.hex[:8]}"
-        return f"{self.name} ({label})"
+        return f"{self.name} ({self.masked_cpr})"
 
     @property
     def has_own_identity(self):

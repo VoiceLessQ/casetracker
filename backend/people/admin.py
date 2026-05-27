@@ -79,7 +79,7 @@ class PersonAccessGrantInline(admin.TabularInline):
 
 @admin.register(Person)
 class PersonAdmin(admin.ModelAdmin):
-    list_display = ("name", "cpr", "address", "birth_date", "is_shielded")
+    list_display = ("name", "masked_cpr", "birth_date", "is_shielded")
     list_filter = ("is_shielded",)
     # CPR/address are encrypted, so they aren't icontains fields. lookup()
     # matches name (partial) and CPR (exact, via blind index).

@@ -151,6 +151,20 @@ and accountable**, not protected by the cipher:
   the rare exception; routine broad search is the intake role, so the flag stays
   meaningful.
 
+### Reducing what's exfiltratable / on screen (insider focus)
+The likelier threat is an authorised insider, and logging only catches them
+after the fact — so the channel is squeezed and the screen surface reduced:
+- **PII masked by default.** CPR shows masked (`••••••-1234`) in lists, the
+  worklist, and every place a person is referenced (`Person.__str__`). The full
+  value appears only on the scoped detail page — cutting casual harvesting and
+  screenshot exposure.
+- **Export is capped.** `EXPORT_MAX_DOCUMENTS` (default 50) blocks "select-all →
+  export"; larger pulls must be deliberately narrowed.
+- **Exports are watermarked.** Each zip's `MANIFEST.txt` records who pulled it
+  (username + user id), when, and a unique export id, and the filename carries
+  the same — so a leaked file traces straight back to the requester. That
+  traceability is a deterrent, not just an audit line.
+
 **Scope of the gate — read carefully; shielding here is PARTIAL.** The check is
 on opening the document *content* (the Open/download action and export). It does
 **not** hide a shielded person from navigation, and it does **not** cover:
@@ -211,6 +225,38 @@ journal is a read-only chronological view on the case page.
 - [ ] `python manage.py setup_roles`; users provisioned with the `Caseworker`
       group + department roles; superuser accounts minimised.
 - [ ] Shielded persons flagged; access grants reviewed.
+
+## Hardening designed but deferred (needs ops or real usage)
+
+These are the right next controls; they're parked deliberately, not forgotten —
+some are deployment/ops (not app code), and detection/alerting has nothing to
+detect on a prototype with no users. Build them when there's a real operator and
+real traffic behind them:
+
+- **Hold less data** — the biggest lever, and free: the M365 offload + not
+  storing CPR, storing only fields actually used, and a **retention/purge**
+  policy so old case data isn't liability sitting in a future breach.
+- **Keys in Azure Key Vault**, isolated from the data — a key next to the
+  database makes encryption-at-rest pointless. (Today: from a secret manager
+  via `FIELD_ENCRYPTION_KEY`; Key Vault is the deployment target.)
+- **MFA at the identity provider (Entra)** — kills most account-takeover; the
+  single biggest win against the external attacker. Comes with the SSO work.
+- **Tamper-evident audit** — ship `*Event` logs to an external write-once store
+  / the municipality's SIEM, so the trail survives even if the app (or an
+  insider with DB access) is compromised. App-layer append-only is not
+  tamper-proof.
+- **Least-privilege over time** — access expires when a case closes and drops on
+  role change, instead of standing access accumulating.
+- **Detection/alerting** — unusually large exports, searches not followed by a
+  case action. Needs real usage to be meaningful (otherwise premature).
+- **Platform hygiene** — admin IP-restricted, DB not publicly reachable, CSP,
+  dependency scanning/patching, tested ransomware restore.
+
+The meta, honestly: most real protection here is **holding less** and
+**operational discipline** (access reviews, prompt offboarding, no shared
+accounts, device security, a named data controller) plus the independent review
+before real data — not more features. The biggest leaks in systems like this are
+process failures, not missing code.
 
 ## Known limitations / not yet built
 

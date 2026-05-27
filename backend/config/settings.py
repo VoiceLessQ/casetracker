@@ -109,3 +109,7 @@ BACKUP_ENCRYPTION_KEY = os.environ.get("BACKUP_ENCRYPTION_KEY", "")
 # running sequence within the case). Default is a per-case sequence, the most
 # portable scheme; override for a global/yearly register convention.
 JOURNAL_NUMBER_FORMAT = os.environ.get("JOURNAL_NUMBER_FORMAT", "{ref}-{seq:03d}")
+
+# Cap on documents per encrypted export — squeezes the "select all → export"
+# exfiltration channel. Larger pulls must be deliberately narrowed.
+EXPORT_MAX_DOCUMENTS = int(os.environ.get("EXPORT_MAX_DOCUMENTS", "50"))

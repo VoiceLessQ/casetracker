@@ -57,13 +57,17 @@ def _unique_name(used, name):
         i += 1
 
 
-def build_encrypted_zip(documents, password):
+def build_encrypted_zip(documents, password, watermark=""):
     """Build an AES-256 encrypted zip of the given documents.
 
-    Files that resolve to a real file under the drive root are included;
-    everything (including link-only / missing / out-of-bounds files) is recorded
-    in MANIFEST.txt. Returns (zip_bytes, manifest_text, sha256_hex)."""
-    manifest = ["CaseTracker encrypted export", f"documents: {len(documents)}", ""]
+    `watermark` (who pulled it, when, export id) is written into MANIFEST.txt so
+    a leaked file traces back to the requester. Files that resolve to a real file
+    under the drive root are included; everything (including link-only / missing
+    / out-of-bounds files) is recorded too. Returns (zip_bytes, manifest, sha256)."""
+    manifest = ["CaseTracker encrypted export"]
+    if watermark:
+        manifest.append(watermark)
+    manifest += [f"documents: {len(documents)}", ""]
     used = set()
     buf = io.BytesIO()
     with pyzipper.AESZipFile(

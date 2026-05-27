@@ -2,7 +2,9 @@
 # Copyright 2026 VoiceLessQ — https://github.com/VoiceLessQ
 # Licensed under the Apache License 2.0; see LICENSE and NOTICE.
 import base64
+import uuid
 
+from django.conf import settings
 from django.contrib import admin, messages
 from django.db.models import Q
 from django.http import FileResponse
@@ -188,6 +190,7 @@ def export_encrypted_zip(modeladmin, request, queryset):
         for d in denied_docs:
             _log_access(request.user, d, DocumentAccessEvent.Action.EXPORT, False,
                         "shielded person: no active access grant")
+        cap = getattr(settings, "EXPORT_MAX_DOCUMENTS", 50)
         if not reason:
             modeladmin.message_user(request, "A reason is required to export.", messages.ERROR)
         elif not allowed_docs:
@@ -197,9 +200,22 @@ def export_encrypted_zip(modeladmin, request, queryset):
                 "access to. Nothing exported; the attempts were logged.",
                 messages.ERROR,
             )
+        elif len(allowed_docs) > cap:
+            modeladmin.message_user(
+                request,
+                f"Export too large: {len(allowed_docs)} documents exceeds the limit "
+                f"of {cap}. Narrow your selection (bulk extraction is restricted).",
+                messages.ERROR,
+            )
         else:
+            export_id = uuid.uuid4().hex[:12]
+            now = timezone.now()
+            watermark = (
+                f"Exported by {request.user.get_username()} (user id {request.user.id}) "
+                f"at {now:%Y-%m-%d %H:%M %Z} · export {export_id}"
+            )
             password = generate_password()
-            zip_bytes, manifest, sha256 = build_encrypted_zip(allowed_docs, password)
+            zip_bytes, manifest, sha256 = build_encrypted_zip(allowed_docs, password, watermark)
             ExportEvent.objects.create(
                 exported_by=request.user, document_count=len(allowed_docs),
                 reason=reason, manifest=manifest, sha256=sha256,
@@ -212,7 +228,7 @@ def export_encrypted_zip(modeladmin, request, queryset):
                 "count": len(allowed_docs),
                 "denied_count": len(denied_docs),
                 "zip_b64": base64.b64encode(zip_bytes).decode("ascii"),
-                "filename": f"casetracker-export-{timezone.now():%Y%m%d-%H%M%S}.zip",
+                "filename": f"casetracker-export-{now:%Y%m%d-%H%M%S}-{request.user.get_username()}-{export_id}.zip",
             })
 
     return TemplateResponse(request, "admin/cases/export_confirm.html", {
