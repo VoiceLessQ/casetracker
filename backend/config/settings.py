@@ -91,19 +91,33 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # person's permanent internal uid, not on the CPR.)
 MUNICIPAL_DRIVE_ROOT = os.environ.get("MUNICIPAL_DRIVE_ROOT", str(BASE_DIR / "drive"))
 
+def _read_secret(env_name, default=""):
+    """Resolve a secret from <ENV>_FILE first (a path — so the key can live in a
+    mounted secret / a file on the deployer's own network), else <ENV>, else the
+    dev default. Lets keys live off the app host without code changes."""
+    path = os.environ.get(env_name + "_FILE")
+    if path and Path(path).exists():
+        return Path(path).read_text().strip()
+    return os.environ.get(env_name, default)
+
+
 # Key for at-rest field encryption (e.g. the CPR). A stolen DB shows only
 # ciphertext for encrypted columns because the key lives here, not in the data.
 # OPERATIONAL WARNING: this key is required to read encrypted fields — LOSE IT
 # AND THE CPRs ARE UNRECOVERABLE. In production set it from a secret manager /
-# KMS, never commit a real key, and back it up separately from the database.
-FIELD_ENCRYPTION_KEY = os.environ.get(
-    "FIELD_ENCRYPTION_KEY", "dev-only-insecure-field-key-change-me"
-)
+# KMS / mounted file (FIELD_ENCRYPTION_KEY_FILE), never commit a real key, and
+# back it up separately from the database.
+FIELD_ENCRYPTION_KEY = _read_secret("FIELD_ENCRYPTION_KEY", "dev-only-insecure-field-key-change-me")
 
 # Optional dedicated key for encrypted database backups (manage.py backup_db).
-# If empty, the backup key is derived from FIELD_ENCRYPTION_KEY. Set it (from a
-# secret manager) to keep backup access separate from field-decryption access.
-BACKUP_ENCRYPTION_KEY = os.environ.get("BACKUP_ENCRYPTION_KEY", "")
+# If empty, the backup key is derived from FIELD_ENCRYPTION_KEY. Set it (env or
+# BACKUP_ENCRYPTION_KEY_FILE) to keep backup access separate from field access.
+BACKUP_ENCRYPTION_KEY = _read_secret("BACKUP_ENCRYPTION_KEY", "")
+
+# Bring-your-own-encryption: dotted path to a people.crypto.CryptoProvider
+# subclass (your KMS/HSM/cipher). Empty = the built-in Fernet+HKDF base.
+# Switching providers does NOT re-encrypt existing data — that needs a migration.
+FIELD_ENCRYPTION_BACKEND = os.environ.get("FIELD_ENCRYPTION_BACKEND", "")
 
 # Journal number format. Placeholders: {ref} (the case number) and {seq} (the
 # running sequence within the case). Default is a per-case sequence, the most

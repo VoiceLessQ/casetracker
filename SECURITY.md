@@ -50,9 +50,24 @@ Keys (see `people/crypto.py`) are derived via HKDF from a single master secret:
 - `BACKUP_ENCRYPTION_KEY` — optional; if unset, the backup key derives from
   `FIELD_ENCRYPTION_KEY` (distinct HKDF context).
 
+**Bring your own key / encryption (the base is pluggable).** The built-in
+Fernet+HKDF is the default, but it isn't hardcoded:
+- **Key from your own location** — set `FIELD_ENCRYPTION_KEY_FILE` (or
+  `BACKUP_ENCRYPTION_KEY_FILE`) to a path; the key is read from that file (a
+  mounted secret, or a file on your own network) instead of an env var. The key
+  never has to live on the app host.
+- **Your own provider** — set `FIELD_ENCRYPTION_BACKEND` to a dotted path of a
+  `people.crypto.CryptoProvider` subclass (your KMS/HSM, a different cipher,
+  envelope encryption). The app calls the same functions; only the backend
+  changes. Empty = the built-in base.
+- **Caveats:** switching key or provider does **not** re-encrypt existing data —
+  that needs a decrypt-old / encrypt-new migration; the blind index must use a
+  key your provider can reproduce, or CPR search breaks; and prefer a reputable
+  KMS/HSM over a homegrown cipher.
+
 > **OPERATIONAL WARNING:** lose `FIELD_ENCRYPTION_KEY` and the encrypted fields
-> are unrecoverable. In production set it from a secret manager / KMS, never
-> commit it, and back it up **separately** from the database.
+> are unrecoverable. In production set it from a secret manager / KMS / mounted
+> file, never commit it, and back it up **separately** from the database.
 
 **What this does and does NOT protect.** Encryption at rest protects a *stolen
 database file or backup*. It does **nothing** against a compromised application
