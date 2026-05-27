@@ -1,0 +1,87 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-05-27 10:33-0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: cases/templates/dashboard.html:8
+msgid "Dashboard"
+msgstr ""
+
+#: cases/templates/dashboard.html:37
+msgid "no department"
+msgstr ""
+
+#: cases/templates/dashboard.html:38
+msgid "superuser"
+msgstr ""
+
+#: cases/templates/dashboard.html:44
+msgid "Language"
+msgstr ""
+
+#: cases/templates/dashboard.html:54
+#, python-format
+msgid "Viewing as %(who)s (impersonated by %(by)s)."
+msgstr ""
+
+#: cases/templates/dashboard.html:55
+msgid "Stop impersonation"
+msgstr ""
+
+#: cases/templates/dashboard.html:61
+msgid "My cases"
+msgstr ""
+
+#: cases/templates/dashboard.html:66
+msgid "No cases assigned to you."
+msgstr ""
+
+#: cases/templates/dashboard.html:71
+msgid "My tasks"
+msgstr ""
+
+#: cases/templates/dashboard.html:75
+msgid "due"
+msgstr ""
+
+#: cases/templates/dashboard.html:76
+msgid "Nothing due."
+msgstr ""
+
+#: cases/templates/dashboard.html:81
+msgid "Needs attention"
+msgstr ""
+
+#: cases/templates/dashboard.html:85
+msgid "quiet since"
+msgstr ""
+
+#: cases/templates/dashboard.html:86
+msgid "Nothing gone unexpectedly quiet."
+msgstr ""
+
+#: cases/templates/dashboard.html:91
+msgid "Department queue"
+msgstr ""
+
+#: cases/templates/dashboard.html:95
+msgid "unassigned"
+msgstr ""
+
+#: cases/templates/dashboard.html:96
+msgid "Queue is clear."
+msgstr ""

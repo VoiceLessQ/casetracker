@@ -1,0 +1,86 @@
+# CaseTracker — Danish (da) UI translations.
+# DRAFT: dashboard UI labels, best-effort — have a native Danish speaker review
+# before any real use (administrative terms especially).
+# Licensed under the Apache License 2.0; see LICENSE and NOTICE.
+msgid ""
+msgstr ""
+"Project-Id-Version: CaseTracker\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-05-27 10:33-0100\n"
+"PO-Revision-Date: 2026-05-27 10:40-0100\n"
+"Last-Translator: draft <review@needed>\n"
+"Language-Team: Danish\n"
+"Language: da\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: cases/templates/dashboard.html:8
+msgid "Dashboard"
+msgstr "Overblik"
+
+#: cases/templates/dashboard.html:37
+msgid "no department"
+msgstr "ingen afdeling"
+
+#: cases/templates/dashboard.html:38
+msgid "superuser"
+msgstr "superbruger"
+
+#: cases/templates/dashboard.html:44
+msgid "Language"
+msgstr "Sprog"
+
+#: cases/templates/dashboard.html:54
+#, python-format
+msgid "Viewing as %(who)s (impersonated by %(by)s)."
+msgstr "Vist som %(who)s (efterlignet af %(by)s)."
+
+#: cases/templates/dashboard.html:55
+msgid "Stop impersonation"
+msgstr "Stop efterligning"
+
+#: cases/templates/dashboard.html:61
+msgid "My cases"
+msgstr "Mine sager"
+
+#: cases/templates/dashboard.html:66
+msgid "No cases assigned to you."
+msgstr "Ingen sager tildelt dig."
+
+#: cases/templates/dashboard.html:71
+msgid "My tasks"
+msgstr "Mine opgaver"
+
+#: cases/templates/dashboard.html:75
+msgid "due"
+msgstr "frist"
+
+#: cases/templates/dashboard.html:76
+msgid "Nothing due."
+msgstr "Ingenting med frist."
+
+#: cases/templates/dashboard.html:81
+msgid "Needs attention"
+msgstr "Kræver opmærksomhed"
+
+#: cases/templates/dashboard.html:85
+msgid "quiet since"
+msgstr "stille siden"
+
+#: cases/templates/dashboard.html:86
+msgid "Nothing gone unexpectedly quiet."
+msgstr "Intet er gået uventet stille."
+
+#: cases/templates/dashboard.html:91
+msgid "Department queue"
+msgstr "Afdelingskø"
+
+#: cases/templates/dashboard.html:95
+msgid "unassigned"
+msgstr "ikke tildelt"
+
+#: cases/templates/dashboard.html:96
+msgid "Queue is clear."
+msgstr "Køen er tom."

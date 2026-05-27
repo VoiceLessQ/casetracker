@@ -1,15 +1,17 @@
-<!DOCTYPE html>
+{% load i18n %}<!DOCTYPE html>
 <!-- vlq-8b4f27ead5774bdaa922800f82f2167f -->
-<html lang="da">
+{% get_current_language as CUR_LANG %}
+<html lang="{{ CUR_LANG }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CaseTracker — dashboard</title>
+  <title>CaseTracker — {% trans "Dashboard" %}</title>
   <style>
     body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f4f5f7; color: #1c1c1c; }
-    header { background: #20419a; color: #fff; padding: 14px 24px; }
+    header { background: #20419a; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: flex-start; }
     header h1 { font-size: 1.15rem; margin: 0; }
     header .who { font-size: .85rem; opacity: .9; margin-top: 2px; }
+    header .lang select { font-size: .8rem; }
     .banner { background: #ffe9b3; color: #5a4500; padding: 8px 24px; font-size: .85rem; }
     .lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; padding: 24px; }
     .lane { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; }
@@ -28,56 +30,70 @@
 </head>
 <body>
   <header>
-    <h1>CaseTracker</h1>
-    <div class="who">
-      {{ worker.get_full_name|default:worker.username }}
-      {% if departments %}· {% for m in departments %}{{ m.department.name }} ({{ m.get_role_display }}){% if not forloop.last %}, {% endif %}{% endfor %}{% else %}· no department{% endif %}
-      {% if worker.is_superuser %}· superuser{% endif %}
+    <div>
+      <h1>CaseTracker</h1>
+      <div class="who">
+        {{ worker.get_full_name|default:worker.username }}
+        {% if departments %}· {% for m in departments %}{{ m.department.name }} ({{ m.get_role_display }}){% if not forloop.last %}, {% endif %}{% endfor %}{% else %}· {% trans "no department" %}{% endif %}
+        {% if worker.is_superuser %}· {% trans "superuser" %}{% endif %}
+      </div>
     </div>
+    <form action="{% url 'set_language' %}" method="post" class="lang">{% csrf_token %}
+      <input name="next" type="hidden" value="{{ request.path }}">
+      {% get_available_languages as LANGS %}
+      <select name="language" onchange="this.form.submit()" aria-label="{% trans 'Language' %}">
+        {% for code, name in LANGS %}
+          <option value="{{ code }}"{% if code == CUR_LANG %} selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </form>
   </header>
 
   {% if impersonator %}
-    <div class="banner">Viewing as <strong>{{ worker.username }}</strong> (impersonated by {{ impersonator.username }}). <a href="/stop-impersonation/">Stop impersonation</a></div>
+    <div class="banner">
+      {% blocktrans with who=worker.username by=impersonator.username %}Viewing as {{ who }} (impersonated by {{ by }}).{% endblocktrans %}
+      <a href="/stop-impersonation/">{% trans "Stop impersonation" %}</a>
+    </div>
   {% endif %}
 
   <div class="lanes">
     <section class="lane">
-      <h2>My cases <span class="count">{{ my_cases|length }}</span></h2>
+      <h2>{% trans "My cases" %} <span class="count">{{ my_cases|length }}</span></h2>
       <ul>
         {% for c in my_cases %}
           <li><a href="/admin/cases/case/{{ c.id }}/change/">{{ c.ref }} — {{ c.title }}</a>
             <div class="meta">{{ c.person|default:"—" }} · {{ c.get_status_display }} · {{ c.owner_department.name }}</div></li>
-        {% empty %}<li class="empty">No cases assigned to you.</li>{% endfor %}
+        {% empty %}<li class="empty">{% trans "No cases assigned to you." %}</li>{% endfor %}
       </ul>
     </section>
 
     <section class="lane">
-      <h2>My tasks <span class="count">{{ my_tasks|length }}</span></h2>
+      <h2>{% trans "My tasks" %} <span class="count">{{ my_tasks|length }}</span></h2>
       <ul>
         {% for t in my_tasks %}
           <li><a href="/admin/cases/case/{{ t.case_id }}/change/">{{ t.what }}</a>
-            <div class="meta">{{ t.case.ref }} · due <span class="due">{{ t.due_date }}</span></div></li>
-        {% empty %}<li class="empty">Nothing due.</li>{% endfor %}
+            <div class="meta">{{ t.case.ref }} · {% trans "due" %} <span class="due">{{ t.due_date }}</span></div></li>
+        {% empty %}<li class="empty">{% trans "Nothing due." %}</li>{% endfor %}
       </ul>
     </section>
 
     <section class="lane attention">
-      <h2>Needs attention <span class="count">{{ needs_attention|length }}</span></h2>
+      <h2>{% trans "Needs attention" %} <span class="count">{{ needs_attention|length }}</span></h2>
       <ul>
         {% for c in needs_attention %}
           <li><a href="/admin/cases/case/{{ c.id }}/change/">{{ c.ref }} — {{ c.title }}</a>
-            <div class="meta">{{ c.person|default:"—" }} · quiet since {{ c.updated_at.date }} · {{ c.owner_department.name }}</div></li>
-        {% empty %}<li class="empty">Nothing gone unexpectedly quiet.</li>{% endfor %}
+            <div class="meta">{{ c.person|default:"—" }} · {% trans "quiet since" %} {{ c.updated_at.date }} · {{ c.owner_department.name }}</div></li>
+        {% empty %}<li class="empty">{% trans "Nothing gone unexpectedly quiet." %}</li>{% endfor %}
       </ul>
     </section>
 
     <section class="lane">
-      <h2>Department queue <span class="count">{{ queue|length }}</span></h2>
+      <h2>{% trans "Department queue" %} <span class="count">{{ queue|length }}</span></h2>
       <ul>
         {% for c in queue %}
           <li><a href="/admin/cases/case/{{ c.id }}/change/">{{ c.ref }} — {{ c.title }}</a>
-            <div class="meta">{{ c.person|default:"—" }} · {{ c.get_status_display }} · {{ c.owner_department.name }} · unassigned</div></li>
-        {% empty %}<li class="empty">Queue is clear.</li>{% endfor %}
+            <div class="meta">{{ c.person|default:"—" }} · {{ c.get_status_display }} · {{ c.owner_department.name }} · {% trans "unassigned" %}</div></li>
+        {% empty %}<li class="empty">{% trans "Queue is clear." %}</li>{% endfor %}
       </ul>
     </section>
   </div>

@@ -91,11 +91,22 @@ made visible, not just described.
 
 ## Languages
 
-Honest status: i18n is **plumbed, not finished**. Danish (default) and English
-are configured and `USE_I18N` is on, so Django's admin chrome shows in Danish —
-but our own labels and screens aren't translated yet, and there's no language
-switcher. A real switchable Danish/English UI still needs string-wrapping,
-translation files (ideally a human translator), and a per-user language choice.
+The system is **translatable into any language**, not hardwired to one. The
+worker dashboard is wrapped for translation and **switchable at runtime**
+(`LocaleMiddleware` + a switcher posting to `i18n/setlang/`; default via
+`LANGUAGE_CODE`). A **draft Danish** catalog ships — UI labels only, **needs a
+native speaker's review** before real use. English is the source language;
+Kalaallisut is configured but not yet translated.
+
+Add or update a language:
+```bash
+python manage.py makemessages -l <code>     # extract strings → locale/<code>/LC_MESSAGES/django.po
+# ...translate the .po (ideally a human translator)...
+python manage.py compilemessages             # build .mo (needs the gettext toolchain)
+```
+
+Still to do: wrap the **model/admin labels** (the admin still shows our English
+field names) — a mechanical pass — and a native review of the Danish.
 
 - `org` — departments and memberships (the scoping unit + per-department roles).
 - `people` — the people on cases, temporal family tree, dash-tolerant ID/name

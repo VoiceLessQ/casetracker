@@ -33,6 +33,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.locale.LocaleMiddleware",   # language from session/cookie/Accept-Language
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -75,7 +76,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # i18n plumbing in from the start so the Kalaallisut pass is later just
 # translation files, not a rewrite. Wrap user-facing strings in gettext.
-LANGUAGE_CODE = "da"
+# Default language; a deployer in any country sets their own. Users can switch
+# at runtime (LocaleMiddleware + the i18n/setlang view).
+LANGUAGE_CODE = os.environ.get("LANGUAGE_CODE", "da")
 LANGUAGES = [("da", "Dansk"), ("kl", "Kalaallisut"), ("en", "English")]
 LOCALE_PATHS = [BASE_DIR / "locale"]
 TIME_ZONE = "America/Nuuk"
