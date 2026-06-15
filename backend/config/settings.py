@@ -14,7 +14,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-insecure-key-change-me")
-DEBUG = os.environ.get("DEBUG", "1") == "1"
+DEBUG = os.environ.get("DEBUG", "0") == "1"
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 INSTALLED_APPS = [
@@ -116,6 +116,24 @@ FIELD_ENCRYPTION_KEY = _read_secret("FIELD_ENCRYPTION_KEY", "dev-only-insecure-f
 # If empty, the backup key is derived from FIELD_ENCRYPTION_KEY. Set it (env or
 # BACKUP_ENCRYPTION_KEY_FILE) to keep backup access separate from field access.
 BACKUP_ENCRYPTION_KEY = _read_secret("BACKUP_ENCRYPTION_KEY", "")
+
+# Fail closed: the insecure dev defaults above must never back a non-DEBUG run
+# (i.e. anything exposed). With DEBUG off, the real keys are required from the
+# environment; local dev still runs on the defaults with DEBUG=1.
+if not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+
+    _insecure_defaults = {
+        "SECRET_KEY": (SECRET_KEY, "dev-only-insecure-key-change-me"),
+        "FIELD_ENCRYPTION_KEY": (FIELD_ENCRYPTION_KEY, "dev-only-insecure-field-key-change-me"),
+    }
+    _still_default = [name for name, (value, default) in _insecure_defaults.items() if value == default]
+    if _still_default:
+        raise ImproperlyConfigured(
+            "Refusing to start with DEBUG off and the insecure dev default still set for: "
+            + ", ".join(_still_default)
+            + ". Set these from the environment (or a *_FILE secret) before running exposed."
+        )
 
 # Bring-your-own-encryption: dotted path to a people.crypto.CryptoProvider
 # subclass (your KMS/HSM/cipher). Empty = the built-in Fernet+HKDF base.
