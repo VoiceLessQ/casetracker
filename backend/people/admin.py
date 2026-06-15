@@ -7,7 +7,7 @@ from django.template.response import TemplateResponse
 from django.urls import path
 
 from cases.models import Document
-from .access import log_search, searchable_persons, visible_persons
+from .access import log_search, searchable_persons, visible_person_notes, visible_persons
 from .crypto import blind_index_for_term
 from .models import Person, Relationship, PersonNote, PersonAccessGrant, SearchEvent
 
@@ -55,6 +55,11 @@ class PersonNoteInline(admin.TabularInline):
     can_delete = False
     fields = ("text", "visibility", "author", "created_at")
     readonly_fields = ("created_at",)
+
+    def get_queryset(self, request):
+        # Enforce note visibility: DEPARTMENT notes only show to users sharing a
+        # department with the author (superusers see all).
+        return visible_person_notes(request.user, super().get_queryset(request))
 
 
 class PersonDocumentInline(admin.TabularInline):
@@ -154,6 +159,11 @@ class PersonNoteAdmin(CprSearchMixin, admin.ModelAdmin):
     list_display = ("person", "created_at", "visibility", "author")
     list_filter = ("visibility",)
     search_fields = ("person__name",)   # text is encrypted; CPR via blind index
+
+    def get_queryset(self, request):
+        # Enforce note visibility (DEPARTMENT notes only to a department the
+        # author shares with the viewer); superusers see all.
+        return visible_person_notes(request.user, super().get_queryset(request))
 
     # Append-only: notes can be added, never edited or deleted.
     def has_change_permission(self, request, obj=None):

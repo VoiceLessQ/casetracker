@@ -93,3 +93,23 @@ def can_open_person_documents(user, person, on=None):
         .filter(Q(expires_on__isnull=True) | Q(expires_on__gte=on))
         .exists()
     )
+
+
+def visible_person_notes(user, qs=None):
+    """Enforce `PersonNote.visibility` on reads. ALL_STAFF notes are visible to
+    any staff; a DEPARTMENT note is visible only to a user who shares a
+    department with the note's author. Superusers see everything.
+
+    `visibility` was recorded but not enforced before — without this filter a
+    DEPARTMENT note is readable by anyone who can reach the person."""
+    from .models import PersonNote
+
+    if qs is None:
+        qs = PersonNote.objects.all()
+    if getattr(user, "is_superuser", False):
+        return qs
+    dept_ids = list(user.memberships.values_list("department_id", flat=True))
+    return qs.filter(
+        Q(visibility=PersonNote.Visibility.ALL_STAFF)
+        | Q(author__memberships__department_id__in=dept_ids)
+    ).distinct()
