@@ -6,6 +6,8 @@ import uuid
 from django.conf import settings
 from django.db import models
 
+from config.audit import AppendOnly
+
 from . import crypto
 from .fields import EncryptedCharField, EncryptedTextField
 
@@ -185,7 +187,7 @@ class Relationship(models.Model):
         return f"{self.relative} is {self.get_relation_display().lower()} of {self.person}{state}"
 
 
-class PersonNote(models.Model):
+class PersonNote(AppendOnly, models.Model):
     """A dated, append-only note that travels WITH the person across all their
     cases — a running record, newest first.
 
@@ -194,14 +196,15 @@ class PersonNote(models.Model):
         sensitive setting; in a real deployment, reads here should be access-
         logged, and the field exists so broad visibility is a deliberate choice.
       - DEPARTMENT keeps it to the author's department.
-    Append-only is enforced in admin so the running record can't be rewritten.
+    Append-only is enforced at the model layer (AppendOnly) so the running
+    record can't be rewritten or deleted, not just in admin.
     """
 
     class Visibility(models.TextChoices):
         ALL_STAFF = "all", "All caseworkers / social workers"
         DEPARTMENT = "dept", "Owning department only"
 
-    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="notes")
+    person = models.ForeignKey(Person, on_delete=models.PROTECT, related_name="notes")
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     text = EncryptedTextField()                                        # ENCRYPTED at rest
     visibility = models.CharField(

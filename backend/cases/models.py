@@ -4,6 +4,7 @@
 from django.conf import settings
 from django.db import models
 
+from config.audit import AppendOnly
 from org.models import Department
 
 
@@ -111,11 +112,12 @@ class Case(models.Model):
         return [r for r in rules if r.reference.in_effect(on)]
 
 
-class StatusEvent(models.Model):
+class StatusEvent(AppendOnly, models.Model):
     """Append-only history. Captures status changes AND department handoffs,
-    which is the cross-department 'where did it go' trail."""
+    which is the cross-department 'where did it go' trail. PROTECT on the case
+    keeps the trail from being cascade-deleted with the case."""
 
-    case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="events")
+    case = models.ForeignKey(Case, on_delete=models.PROTECT, related_name="events")
     timestamp = models.DateTimeField(auto_now_add=True)
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     from_status = models.CharField(max_length=16, blank=True)
@@ -251,10 +253,10 @@ class FollowUp(models.Model):
         return f"{self.case.ref}: {self.what} (due {self.due_date})"
 
 
-class CaseLog(models.Model):
+class CaseLog(AppendOnly, models.Model):
     """Append-only narrative log. A caseworker records what they did; entries
-    are never edited or deleted (enforced in admin) — they accumulate as the
-    case's running record of who did what, when."""
+    are never edited or deleted (enforced at the model layer via AppendOnly) —
+    they accumulate as the case's running record of who did what, when."""
 
     class Kind(models.TextChoices):
         NOTE = "note", "Note"
@@ -263,7 +265,7 @@ class CaseLog(models.Model):
         DECISION = "decision", "Decision"
         HANDOFF = "handoff", "Handoff"
 
-    case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="logs")
+    case = models.ForeignKey(Case, on_delete=models.PROTECT, related_name="logs")
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.NOTE)
     text = models.TextField()
