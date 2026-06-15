@@ -21,6 +21,15 @@ def impersonate(modeladmin, request, queryset):
         modeladmin.message_user(request, "Select exactly one user.", messages.ERROR)
         return
     target = queryset.first()
+    if target.is_superuser:
+        modeladmin.message_user(
+            request,
+            "Refusing to impersonate another superuser — impersonation is for testing "
+            "non-privileged caseworker views, and superuser-on-superuser muddies the "
+            "audit trail (actions get attributed to the target, not the real user).",
+            messages.ERROR,
+        )
+        return
     if not target.is_staff:
         modeladmin.message_user(
             request,
