@@ -135,6 +135,16 @@ if not DEBUG:
             + ". Set these from the environment (or a *_FILE secret) before running exposed."
         )
 
+    # HTTPS hardening for any exposed (non-DEBUG) run. Assumes TLS is terminated
+    # in front of the app; behind a reverse proxy you may also need
+    # SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https").
+    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "1") == "1"
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "31536000"))  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 # Bring-your-own-encryption: dotted path to a people.crypto.CryptoProvider
 # subclass (your KMS/HSM/cipher). Empty = the built-in Fernet+HKDF base.
 # Switching providers does NOT re-encrypt existing data — that needs a migration.
