@@ -272,11 +272,14 @@ encrypted.
 
 ## 5. Audit trails
 
-Append-only, never editable in admin:
-- `CaseLog`, `PersonNote` — narrative records.
-- `StatusEvent` — status/department handoffs.
-- `ExportEvent` — every export.
-- `DocumentAccessEvent` — every document open and blocked attempt.
+Append-only, never edited or deleted:
+- `CaseLog`, `PersonNote`, `StatusEvent` — narrative records and status/department
+  handoffs. Enforced at the **model layer**: the `AppendOnly` mixin refuses ORM
+  updates and deletes on the model itself (not only in admin), and their
+  case/person parents are `PROTECT`ed so a case or person deletion can't cascade
+  the trail away.
+- `ExportEvent` — every export. (admin-layer)
+- `DocumentAccessEvent` — every document open and blocked attempt. (admin-layer)
 - `DocumentActivity` — every document add / edit / journalize / remove, with the
   acting user. Snapshots the label, so the trail survives even if a draft is
   deleted — nothing enters or changes silently. Surfaced in the case journal.
@@ -289,14 +292,20 @@ with direct database access can still alter rows. Real tamper-evidence (hash-
 chaining, signed entries, or WORM storage) is **not** implemented. The per-case
 journal is a read-only chronological view on the case page.
 
-> All "append-only / never editable" claims in this document mean *enforced in
-> the application/admin layer*. None of them are tamper-proof against direct
-> database or filesystem access — that requires storage-level controls.
+> Append-only for `CaseLog` / `PersonNote` / `StatusEvent` is enforced at the
+> model layer (ORM updates and deletes refused); the other event logs are
+> enforced in the admin layer. Either way it is **not tamper-proof**: a bulk
+> `QuerySet.delete()` and direct database or filesystem access still bypass it —
+> real tamper-evidence requires storage-level controls (hash-chaining, signed
+> entries, WORM, or an external write-once log).
 
 ## Deployment checklist
 
-- [ ] `SECRET_KEY` set from the environment (not the dev default).
-- [ ] `DEBUG=0`.
+- [ ] `SECRET_KEY` and `FIELD_ENCRYPTION_KEY` set from the environment (not the
+      dev defaults). With `DEBUG` off the app **fails closed** — it refuses to
+      start while either is still the dev placeholder — so this is enforced, but
+      verify it.
+- [ ] `DEBUG=0` (the default; `DEBUG=1` is local dev only).
 - [ ] `ALLOWED_HOSTS` set to the real host(s).
 - [ ] **Encryption key isolated from the database host** — from a secret manager
       / KMS / mounted secret, never on the same box as the DB (the model is void
@@ -357,7 +366,9 @@ Be honest about these — do not treat the prototype as production-hardened:
   `testing` app entirely in production.
 - **`PersonNote.visibility`** (all-staff vs department) is recorded but **not
   enforced on reads**.
-- **`StatusEvent`** is not auto-created on status/department change (manual).
+- **`StatusEvent`** is auto-created on the admin save and the handoff-approval
+  path, but not at the ORM/signal layer — a direct `Case.save()` or a management
+  command skips it.
 - **Name and `birth_date`** are not encrypted (name must stay searchable;
   encrypting it would disable partial-name lookup).
 - Search is now scoped + logged + break-the-glass, but there's **no rate-limiting
