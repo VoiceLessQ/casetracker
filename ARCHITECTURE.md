@@ -225,10 +225,12 @@ etc.), a department move goes through an approved **handoff**:
 - Direct department changes are otherwise locked for non-superusers, so the
   approval path is the way a case moves on.
 
-**Handoff/status changes are auto-recorded.** Any change to a case's owning
-department or status writes a `StatusEvent` (with the acting user), so "where is
-it now / where has it been" is a trustworthy trail — this powers both the ping
-routing and the takeover record. (Previously manual; now wired.)
+**Handoff/status changes are auto-recorded.** A change to a case's owning
+department or status writes a `StatusEvent` (with the acting user) via the admin
+save and the handoff-approval path, so "where is it now / where has it been" is a
+trustworthy trail — this powers both the ping routing and the takeover record.
+(Previously manual; now wired in those paths — a direct `Case.save()` at the ORM
+layer is the remaining gap.)
 
 **Takeover for continuity is the payoff.** A case must not die because its worker
 is overloaded or leaves. A Lead reassigns (or a worker picks up from the
@@ -318,8 +320,10 @@ the system applies *for* the worker, with required items the gate enforces.
 **Built (on `main`, prototype):** department scoping, viewer/member/lead roles,
 gated + logged + AES-256 password-encrypted export, field encryption at rest
 (CPR + blind index, address, notes), encrypted DB backup/restore, the shielded
-document access gate + access log, formal journaling (direction + per-case
-journal numbers + app-layer immutability), `SECURITY.md`.
+document access gate + access log, model-layer append-only audit records
+(`AppendOnly` + `PROTECT`ed parents), enforced `PersonNote.visibility`, formal
+journaling (direction + per-case journal numbers + app-layer immutability),
+first security-path tests, `SECURITY.md`.
 
 **The substantial future build:**
 1. **A worker dashboard** — today the system is Django-admin only; the
