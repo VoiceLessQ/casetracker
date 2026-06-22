@@ -27,9 +27,35 @@ class CaseQuerySet(models.QuerySet):
         cutoff = on - timedelta(days=days)
         return (
             self.filter(updated_at__date__lte=cutoff, mute_pings=False)
-            .exclude(status=self.model.Status.WAITING)
+            .exclude(status__in=[self.model.Status.WAITING, self.model.Status.CLOSED])
             .filter(models.Q(review_after__isnull=True) | models.Q(review_after__lt=on))
         )
+
+    def bouncing(self):
+        """Cases that have RETURNED to a department they had already left — the
+        ping-pong pattern. Read straight off the StatusEvent trail: the case
+        left a department (from_department=X) and a LATER event brought it back
+        (to_department=X). Origin-independent, so X → Y → X is caught even
+        though X's first placement has no arrival event of its own.
+
+        Detection only. It surfaces candidates for a lead to review and, if
+        warranted, escalate with a CaseFlag — it does NOT auto-flag. Pinging
+        stays opt-in (same stance as `stale()`); a bouncing case is information,
+        not an alert.
+        """
+        came_back = StatusEvent.objects.filter(
+            case_id=models.OuterRef("case_id"),
+            to_department_id=models.OuterRef("from_department_id"),
+            timestamp__gt=models.OuterRef("timestamp"),
+        )
+        returned = (
+            StatusEvent.objects
+            .filter(from_department__isnull=False)
+            .annotate(came_back=models.Exists(came_back))
+            .filter(came_back=True)
+            .values_list("case_id", flat=True)
+        )
+        return self.filter(id__in=returned)
 
 
 class Case(models.Model):
@@ -44,7 +70,8 @@ class Case(models.Model):
         IN_PROGRESS = "in_progress", "In progress"
         WAITING = "waiting", "Waiting"          # waiting on something external
         BLOCKED = "blocked", "Blocked"
-        DONE = "done", "Done"
+        DONE = "done", "Done"                    # this department's part is finished (per-department)
+        CLOSED = "closed", "Closed (reopenable)"  # concluded + dormant — never deleted, always reopenable
 
     ref = models.CharField(max_length=64, unique=True)         # official case number
     title = models.CharField(max_length=160)                   # short label
@@ -110,6 +137,106 @@ class Case(models.Model):
                  .filter(triggers, active=True)
                  .select_related("reference", "category", "circumstance"))
         return [r for r in rules if r.reference.in_effect(on)]
+
+    def continues_lineage(self):
+        """The CONTINUES chain this case belongs to, oldest → newest, including
+        self. Walks predecessors (links_out: this case continues an older one)
+        back to the origin, then successors (links_in) forward, so a recurring
+        matter reads as one ordered history. Cycle-guarded; chains are expected
+        to be short, so the per-step query is fine."""
+        origin, seen = self, {self.pk}
+        while True:
+            link = origin.links_out.filter(kind=CaseLink.Kind.CONTINUES).select_related("to_case").first()
+            if not link or link.to_case_id in seen:
+                break
+            origin = link.to_case
+            seen.add(origin.pk)
+        chain, walked = [], set()
+        node = origin
+        while node and node.pk not in walked:
+            walked.add(node.pk)
+            chain.append(node)
+            nxt = node.links_in.filter(kind=CaseLink.Kind.CONTINUES).select_related("from_case").first()
+            node = nxt.from_case if nxt else None
+        return chain
+
+    def occurrence(self):
+        """`(n, total)`: this case is occurrence n of total along its CONTINUES
+        lineage — `(1, 1)` when it stands alone. Lets a worker see at a glance
+        that a matter has come round before."""
+        chain = self.continues_lineage()
+        for i, c in enumerate(chain):
+            if c.pk == self.pk:
+                return (i + 1, len(chain))
+        return (1, 1)
+
+
+class CaseLocator(Case):
+    """Read-only, cross-department *locator* view of cases (a proxy of Case).
+
+    The anti-blindness / anti-ping-pong window: it answers "where is this case
+    now, and what's its status" by case ref or person name — ACROSS departments,
+    not just your own — without exposing any content. It surfaces only routing
+    metadata (ref, title, holder, status, open flags, last move); documents,
+    notes and the person's protected fields are never reachable from here.
+
+    Two policies hold the expansion in check (see CaseLocatorAdmin):
+      - Default-deny: usable only with the `can_locate` permission, so the
+        cross-department window isn't open to everyone by default.
+      - Shielding stays existence-hidden: the person scope runs through
+        people.access.visible_persons, so a shielded case you hold no grant for
+        does not appear at all — the same rule as the rest of the system.
+    """
+
+    class Meta:
+        proxy = True
+        verbose_name = "case locator"
+        verbose_name_plural = "case locator"
+        permissions = [
+            ("can_locate", "Can locate cases across departments (routing metadata only)"),
+        ]
+
+
+class CaseLink(models.Model):
+    """A typed link from one case to another — the lineage / relationship
+    overlay. CONTINUES captures recurrence: a new case continuing an earlier,
+    concluded one, so a matter that comes round again reads as one ordered
+    history (`Case.occurrence()`) instead of disconnected cases. RELATED and
+    DUPLICATE cover looser ties.
+
+    Direction reads `from_case` <kind> `to_case` — e.g. this year's case
+    CONTINUES last year's. Like every other navigation edge in the system, a
+    link is NOT access: reaching a case through a link never implies permission
+    to open its documents."""
+
+    class Kind(models.TextChoices):
+        CONTINUES = "continues", "Continues / supersedes"
+        RELATED = "related", "Related"
+        DUPLICATE = "duplicate", "Duplicate of"
+
+    from_case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="links_out")
+    to_case = models.ForeignKey(Case, on_delete=models.PROTECT, related_name="links_in")
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.RELATED)
+    note = models.CharField(max_length=255, blank=True)        # why they're linked
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="case_links_made",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["from_case", "to_case", "kind"], name="uniq_case_link",
+            ),
+            models.CheckConstraint(
+                name="case_link_not_self",
+                check=~models.Q(from_case=models.F("to_case")),
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.from_case.ref} {self.get_kind_display().lower()} {self.to_case.ref}"
 
 
 class StatusEvent(AppendOnly, models.Model):
@@ -612,6 +739,55 @@ class CaseHandoff(models.Model):
 
     def __str__(self):
         return f"{self.case.ref}: {self.from_department} → {self.to_department} ({self.status})"
+
+
+class CaseFlag(models.Model):
+    """An escalation raised on a case: a worker flags that it needs a head's
+    attention — optionally a *different* department than the one holding it
+    (e.g. the one a case keeps bouncing back to). It carries only routing
+    metadata — case ref, departments, reason — never the person's protected
+    content, so it can be raised and triaged from the case id alone. Acting on
+    it still passes the normal document-access gate (guardrail #3): a flag says
+    'this case needs a look', not 'you may open its documents'.
+
+    Unlike `stale()`, which only surfaces unexplained silence, a flag is a
+    deliberate, addressed signal. Lifecycle (open → acknowledged → resolved)
+    mirrors CaseHandoff: the row is moved along via admin actions, not by
+    editing it."""
+
+    class Kind(models.TextChoices):
+        ATTENTION = "attention", "Needs attention"
+        BLOCKED = "blocked", "Blocked — needs a decision"
+        RECURRING = "recurring", "Keeps coming back"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        ACKNOWLEDGED = "acknowledged", "Acknowledged"
+        RESOLVED = "resolved", "Resolved"
+
+    case = models.ForeignKey(Case, on_delete=models.PROTECT, related_name="flags")
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.ATTENTION)
+    to_department = models.ForeignKey(
+        Department, on_delete=models.PROTECT, related_name="flags_received",
+    )  # who should look — defaults to the holding department, may be another
+    text = models.CharField(max_length=500, blank=True)            # why it's flagged
+    raised_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="flags_raised",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        null=True, blank=True, related_name="flags_resolved",
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolution_note = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ["status", "-created_at"]
+
+    def __str__(self):
+        return f"{self.case.ref}: {self.get_kind_display()} ({self.status})"
 
 
 class DocumentType(models.Model):

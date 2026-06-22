@@ -1,0 +1,33 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p>You are about to <strong>close</strong> {{ cases|length }} case(s). Closing
+<em>concludes</em> a case but never deletes it — the case, its folder and its history
+stay on record, and it can be <strong>reopened at any time</strong>. The closure is
+logged on each case's history with the reason below.</p>
+
+<ul>
+  {% for c in cases %}
+    <li>{{ c.ref }} &mdash; {{ c.title }} <em>({{ c.get_status_display }})</em></li>
+  {% endfor %}
+</ul>
+
+<form method="post">{% csrf_token %}
+  <input type="hidden" name="action" value="close_cases">
+  <input type="hidden" name="confirm" value="yes">
+  {% for pk in selected %}
+    <input type="hidden" name="{{ action_checkbox_name }}" value="{{ pk }}">
+  {% endfor %}
+  <p>
+    <label for="reason">Reason (logged):</label><br>
+    <input type="text" id="reason" name="reason" size="70" required
+           placeholder="e.g. Matter concluded — benefit granted and paid">
+  </p>
+  <p>
+    <label><input type="checkbox" name="override" value="yes">
+      Close even if required items are still outstanding (lead only — the
+      outstanding items are recorded in the log)</label>
+  </p>
+  <input type="submit" class="default" value="Close case(s)">
+  <a href="#" class="button cancel-link" onclick="history.back();return false;">Cancel</a>
+</form>
+{% endblock %}

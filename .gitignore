@@ -36,6 +36,7 @@ drive/
 
 # Local handoff notes (kept out of the repo)
 CLAUDE.md
+EXTERNAL-REVIEW.md
 
 # Editor / OS
 .idea/

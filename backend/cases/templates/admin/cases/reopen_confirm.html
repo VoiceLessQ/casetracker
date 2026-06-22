@@ -1,0 +1,27 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p>You are about to <strong>reopen</strong> {{ cases|length }} case(s). A reopened case
+returns to <em>In progress</em> and the reopening is logged on its history. Only cases
+currently <em>Closed</em> can be reopened — anything else is skipped.</p>
+
+<ul>
+  {% for c in cases %}
+    <li>{{ c.ref }} &mdash; {{ c.title }} <em>({{ c.get_status_display }})</em></li>
+  {% endfor %}
+</ul>
+
+<form method="post">{% csrf_token %}
+  <input type="hidden" name="action" value="reopen_cases">
+  <input type="hidden" name="confirm" value="yes">
+  {% for pk in selected %}
+    <input type="hidden" name="{{ action_checkbox_name }}" value="{{ pk }}">
+  {% endfor %}
+  <p>
+    <label for="reason">Reason (logged):</label><br>
+    <input type="text" id="reason" name="reason" size="70" required
+           placeholder="e.g. Citizen reapplied — new circumstances">
+  </p>
+  <input type="submit" class="default" value="Reopen case(s)">
+  <a href="#" class="button cancel-link" onclick="history.back();return false;">Cancel</a>
+</form>
+{% endblock %}
